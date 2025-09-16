@@ -1,0 +1,295 @@
+
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+async function seedGerencialData() {
+  console.log('🌱 Seeding gerencial data...');
+  
+  try {
+    // Buscar usuarios existentes
+    const vendedores = await prisma.user.findMany({
+      where: { rol: 'VENDEDOR' },
+      take: 4
+    });
+
+    const gerentes = await prisma.user.findMany({
+      where: { rol: 'GERENTE_VENTAS' },
+      take: 1
+    });
+
+    if (vendedores.length === 0 || gerentes.length === 0) {
+      console.log('❌ No se encontraron usuarios. Ejecuta el seed principal primero.');
+      return;
+    }
+
+    const gerente = gerentes[0];
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+
+    // Seed Metas de Vendedores
+    console.log('📊 Creando metas de vendedores...');
+    for (const vendedor of vendedores) {
+      await prisma.metaVendedor.upsert({
+        where: {
+          vendedorId_mes_year: {
+            vendedorId: vendedor.id,
+            mes: currentMonth,
+            year: currentYear
+          }
+        },
+        update: {},
+        create: {
+          vendedorId: vendedor.id,
+          mes: currentMonth,
+          year: currentYear,
+          metaAutos: Math.floor(Math.random() * 8) + 4, // 4-12 autos
+          metaIngresos: (Math.floor(Math.random() * 4000000) + 2000000), // 2M-6M
+          autosVendidos: Math.floor(Math.random() * 6) + 2, // 2-8 vendidos
+          ingresosReales: (Math.floor(Math.random() * 3000000) + 1500000), // 1.5M-4.5M
+          porcentajeCumplimiento: Math.floor(Math.random() * 50) + 75, // 75%-125%
+          especialidad: ['SUVs Premium', 'Autos Familiares', 'Autos Compactos', 'Sedanes'][Math.floor(Math.random() * 4)],
+          activo: true
+        }
+      });
+    }
+
+    // Seed Esquemas de Comisiones
+    console.log('💰 Creando esquemas de comisiones...');
+    const tiposEsquema = [
+      { nombre: 'Senior Premium', porcentaje: 5.0, bonoVol: 15000, bonoMar: 8000, ref: 25000, mejora: 0 },
+      { nombre: 'Senior', porcentaje: 5.0, bonoVol: 15000, bonoMar: 8000, ref: 25000, mejora: 0 },
+      { nombre: 'Regular', porcentaje: 4.5, bonoVol: 12000, bonoMar: 5000, ref: 20000, mejora: 5000 },
+      { nombre: 'En Desarrollo', porcentaje: 4.0, bonoVol: 0, bonoMar: 0, ref: 15000, mejora: 20000 }
+    ];
+
+    for (let i = 0; i < vendedores.length; i++) {
+      const vendedor = vendedores[i];
+      const esquema = tiposEsquema[i % tiposEsquema.length];
+      
+      await prisma.esquemaComision.upsert({
+        where: { vendedorId: vendedor.id },
+        update: {},
+        create: {
+          vendedorId: vendedor.id,
+          nombre: esquema.nombre,
+          porcentajeBase: esquema.porcentaje,
+          bonoVolumen: esquema.bonoVol,
+          bonoMargen: esquema.bonoMar,
+          incentiveReferencia: esquema.ref,
+          incentiveMejora: esquema.mejora,
+          activo: true
+        }
+      });
+    }
+
+    // Seed Automatizaciones
+    console.log('🤖 Creando automatizaciones...');
+    const agencia = await prisma.agencia.findFirst();
+    
+    if (agencia) {
+      const automatizaciones = [
+        {
+          nombre: 'Reasignación por falta de seguimiento',
+          tipoTrigger: 'tiempo_sin_contacto',
+          condiciones: JSON.stringify({
+            tiempoSinContacto: 72,
+            clasificacionMinima: 'Calificado'
+          }),
+          acciones: JSON.stringify({
+            tipo: 'reasignar',
+            criterios: ['especialidad', 'disponibilidad', 'conversion']
+          })
+        },
+        {
+          nombre: 'Alerta vendedor sobrecargado',
+          tipoTrigger: 'vendedor_sobrecarga',
+          condiciones: JSON.stringify({
+            leadsActivos: 35,
+            conversionBajo: 15
+          }),
+          acciones: JSON.stringify({
+            tipo: 'alerta',
+            destinatario: 'gerente',
+            mensaje: 'Vendedor necesita redistribución de leads'
+          })
+        },
+        {
+          nombre: 'Auto-asignación leads premium',
+          tipoTrigger: 'lead_entrada',
+          condiciones: JSON.stringify({
+            presupuestoMinimo: 800000,
+            clasificacion: 'Elite'
+          }),
+          acciones: JSON.stringify({
+            tipo: 'asignar',
+            criterios: ['top_performer', 'especialidad']
+          })
+        }
+      ];
+
+      for (const auto of automatizaciones) {
+        await prisma.automatizacionWorkflow.upsert({
+          where: { 
+            agenciaId_nombre: {
+              agenciaId: agencia.id,
+              nombre: auto.nombre
+            }
+          },
+          update: {},
+          create: {
+            agenciaId: agencia.id,
+            nombre: auto.nombre,
+            tipoTrigger: auto.tipoTrigger,
+            condiciones: auto.condiciones,
+            acciones: auto.acciones,
+            activo: true
+          }
+        });
+      }
+    }
+
+    // Seed Forecasts
+    console.log('🔮 Creando forecasts...');
+    if (agencia) {
+      await prisma.forecast.upsert({
+        where: {
+          agenciaId_mes_year: {
+            agenciaId: agencia.id,
+            mes: currentMonth,
+            year: currentYear
+          }
+        },
+        update: {},
+        create: {
+          agenciaId: agencia.id,
+          mes: currentMonth,
+          year: currentYear,
+          metaVentas: 45,
+          forecastVentas: 48,
+          confianzaPorcentaje: 89,
+          ingresosProyectados: 33600000,
+          comisionesProyectadas: 1680000,
+          factoresConsiderados: JSON.stringify([
+            { factor: 'Datos históricos', peso: 40 },
+            { factor: 'Pipeline actual', peso: 35 },
+            { factor: 'Rendimiento equipo', peso: 15 },
+            { factor: 'Factores externos', peso: 10 }
+          ])
+        }
+      });
+
+      // Forecasts individuales
+      for (const vendedor of vendedores) {
+        const meta = await prisma.metaVendedor.findFirst({
+          where: {
+            vendedorId: vendedor.id,
+            mes: currentMonth,
+            year: currentYear
+          }
+        });
+
+        if (meta) {
+          await prisma.forecastVendedor.upsert({
+            where: {
+              forecastId_vendedorId: {
+                forecastId: 1, // Asumiendo que el forecast tiene ID 1
+                vendedorId: vendedor.id
+              }
+            },
+            update: {},
+            create: {
+              forecastId: 1,
+              vendedorId: vendedor.id,
+              metaIndividual: meta.metaAutos,
+              forecastIndividual: meta.autosVendidos + Math.floor(Math.random() * 3),
+              confianza: Math.floor(Math.random() * 30) + 70, // 70-100%
+              ingresosProyectados: meta.metaIngresos,
+              comisionProyectada: Math.floor(meta.metaIngresos * 0.05)
+            }
+          });
+        }
+      }
+    }
+
+    // Seed Sesiones de Coaching
+    console.log('🎓 Creando sesiones de coaching...');
+    for (const vendedor of vendedores.slice(0, 2)) { // Solo para 2 vendedores
+      await prisma.sesionCoaching.create({
+        data: {
+          vendedorId: vendedor.id,
+          gerenteId: gerente.id,
+          tipoCoaching: ['conversion', 'seguimiento', 'cierre', 'presentacion'][Math.floor(Math.random() * 4)],
+          problemasIdentificados: JSON.stringify([
+            'Baja conversión en etapa prospecto',
+            'Necesita mejorar técnicas de cierre'
+          ]),
+          planMejora: JSON.stringify([
+            'Sesión de role playing',
+            'Revisión de script de ventas',
+            'Práctica de manejo de objeciones'
+          ]),
+          fechaSesion: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000), // Próximos 7 días
+          duracion: 60,
+          completado: Math.random() > 0.5
+        }
+      });
+    }
+
+    // Seed Alertas del Sistema
+    console.log('🚨 Creando alertas del sistema...');
+    const tiposAlerta = [
+      {
+        tipo: 'lead_critico',
+        prioridad: 'alta',
+        titulo: 'Lead premium sin seguimiento',
+        mensaje: 'Lead de alto valor sin contacto por más de 3 días'
+      },
+      {
+        tipo: 'sobrecarga_vendedor',
+        prioridad: 'media',
+        titulo: 'Vendedor sobrecargado',
+        mensaje: 'Vendedor con más de 30 leads activos'
+      },
+      {
+        tipo: 'meta_riesgo',
+        prioridad: 'alta',
+        titulo: 'Meta en riesgo',
+        mensaje: 'Vendedor con menos del 60% de cumplimiento'
+      }
+    ];
+
+    for (const alerta of tiposAlerta) {
+      await prisma.alertaSistema.create({
+        data: {
+          usuarioId: gerente.id,
+          tipoAlerta: alerta.tipo,
+          prioridad: alerta.prioridad,
+          titulo: alerta.titulo,
+          mensaje: alerta.mensaje,
+          datos: JSON.stringify({ vendedorId: vendedores[0].id }),
+          leida: false
+        }
+      });
+    }
+
+    console.log('✅ Seed gerencial completado exitosamente!');
+    
+  } catch (error) {
+    console.error('❌ Error en seed gerencial:', error);
+    throw error;
+  }
+}
+
+if (require.main === module) {
+  seedGerencialData()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
+
+export default seedGerencialData;

@@ -1,0 +1,557 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/manual_programador_leads/app/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+// NextAuth tables
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Automotive Business Structure
+model GrupoAutomotriz {
+  id           Int      @id @default(autoincrement())
+  nombreGrupo  String
+  logo         String?
+  direccion    String?
+  email        String?
+  paginaWeb    String?
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  marcas       Marca[]
+  usuarios     User[]
+  
+  @@map("grupos_automotrices")
+}
+
+model Marca {
+  id          Int      @id @default(autoincrement())
+  nombreMarca String
+  logo        String?
+  grupoId     Int
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  grupo       GrupoAutomotriz @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  agencias    Agencia[]
+  usuarios    User[]
+  
+  @@map("marcas")
+}
+
+model Agencia {
+  id            Int      @id @default(autoincrement())
+  nombreAgencia String
+  marcaId       Int
+  direccion     String?
+  telefono      String?
+  email         String?
+  gerente       String?
+  logo          String?
+  activo        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  marca         Marca     @relation(fields: [marcaId], references: [id], onDelete: Cascade)
+  usuarios      User[]
+  prospectos    Prospecto[]
+  vehiculos     Vehiculo[]
+  metricasVentas MetricaVenta[]
+  
+  // Nuevas relaciones gerenciales
+  workflows     AutomatizacionWorkflow[]
+  forecasts     Forecast[]
+  reportes      ReporteGerencial[]
+  
+  @@map("agencias")
+}
+
+// User and Role System
+enum TipoRol {
+  DIRECTOR_GENERAL
+  DIRECTOR_MARCA
+  GERENTE_GENERAL
+  GERENTE_VENTAS
+  VENDEDOR
+  DYNAMICFIN_ADMIN
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  name          String?
+  nombre        String
+  apellido      String?
+  password      String
+  rol           TipoRol
+  agenciaId     Int?
+  marcaId       Int?
+  grupoId       Int?
+  activo        Boolean    @default(true)
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  
+  // NextAuth relations
+  accounts      Account[]
+  sessions      Session[]
+  
+  // Business relations
+  agencia       Agencia?         @relation(fields: [agenciaId], references: [id])
+  marca         Marca?           @relation(fields: [marcaId], references: [id])
+  grupo         GrupoAutomotriz? @relation(fields: [grupoId], references: [id])
+  prospectos    Prospecto[]
+  interacciones Interaccion[]
+  
+  // Nuevas relaciones gerenciales
+  metas                     MetaVendedor[]
+  esquemaComision           EsquemaComision[]
+  comisiones                RegistroComision[]
+  reasignacionesAnterior    ReasignacionLead[] @relation("ReasignacionesAnterior")
+  reasignacionesNuevo       ReasignacionLead[] @relation("ReasignacionesNuevo")
+  reasignacionesGerente     ReasignacionLead[] @relation("ReasignacionesGerente")
+  workflowEjecuciones       EjecucionWorkflow[] @relation("WorkflowEjecuciones")
+  forecastVendedor          ForecastVendedor[] @relation("ForecastVendedor")
+  sesionesCoachingVendedor  SesionCoaching[] @relation("CoachingVendedor")
+  sesionesCoachingGerente   SesionCoaching[] @relation("CoachingGerente")
+  grabaciones               GrabacionConversacion[] @relation("GrabacionesVendedor")
+  alertas                   AlertaSistema[] @relation("AlertasUsuario")
+  
+  @@map("usuarios")
+}
+
+// SPPC (Sistema de Perfilamiento y Potencial de Cliente) - 15 Pillars System
+model Pilar {
+  id                Int      @id @default(autoincrement())
+  nombrePilar       String
+  descripcion       String?
+  pesoEstrategico   Decimal  @db.Decimal(5, 4) // e.g., 0.1500 for 15%
+  faseEvaluacion    Int      // 1, 2, or 3
+  activo            Boolean  @default(true)
+  
+  calificaciones    Calificacion[]
+  
+  @@map("pilares")
+}
+
+model Prospecto {
+  id                 Int       @id @default(autoincrement())
+  nombre             String
+  apellido           String?
+  email              String?
+  telefono           String?
+  vendedorId         String
+  agenciaId          Int
+  estatus            String    @default("Nuevo")
+  calificacionTotal  Decimal   @default(0.00) @db.Decimal(5, 2)
+  clasificacion      String?   // "Elite", "Calificado", "A Madurar", "Explorador"
+  vehiculoInteres    String?
+  presupuesto        Decimal?  @db.Decimal(12, 2)
+  fechaContacto      DateTime  @default(now())
+  proximaSeguimiento DateTime?
+  notas              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  
+  vendedor           User           @relation(fields: [vendedorId], references: [id])
+  agencia            Agencia        @relation(fields: [agenciaId], references: [id])
+  calificaciones     Calificacion[]
+  interacciones      Interaccion[]
+  
+  // Nuevas relaciones gerenciales
+  reasignaciones     ReasignacionLead[]
+  workflowEjecuciones EjecucionWorkflow[]
+  grabaciones        GrabacionConversacion[]
+  comisiones         RegistroComision[]
+  
+  @@map("prospectos")
+}
+
+model Calificacion {
+  id               Int      @id @default(autoincrement())
+  prospectoId      Int
+  pilarId          Int
+  puntajeObtenido  Int      @default(0) // 0-100
+  notas            String?
+  updatedAt        DateTime @default(now()) @updatedAt
+  
+  prospecto        Prospecto @relation(fields: [prospectoId], references: [id], onDelete: Cascade)
+  pilar            Pilar     @relation(fields: [pilarId], references: [id])
+  
+  @@unique([prospectoId, pilarId])
+  @@map("calificaciones")
+}
+
+model Interaccion {
+  id           Int      @id @default(autoincrement())
+  prospectoId  Int
+  usuarioId    String
+  tipoContacto String   // "Visita en Piso", "Llamada", "WhatsApp", "Email", etc.
+  fecha        DateTime @default(now())
+  duracion     Int?     // minutos
+  resultado    String?  // "Positivo", "Neutro", "Negativo"
+  notas        String?
+  proximaAccion String?
+  fechaProximaAccion DateTime?
+  
+  prospecto    Prospecto @relation(fields: [prospectoId], references: [id], onDelete: Cascade)
+  usuario      User      @relation(fields: [usuarioId], references: [id])
+  
+  @@map("interacciones")
+}
+
+// Vehicle Management
+model Vehiculo {
+  id              Int     @id @default(autoincrement())
+  agenciaId       Int
+  marca           String
+  modelo          String
+  year            Int
+  version         String?
+  precio          Decimal @db.Decimal(12, 2)
+  color           String?
+  kilometraje     Int?
+  estatus         String  @default("Disponible") // "Disponible", "Vendido", "Apartado"
+  numeroSerie     String? @unique
+  imagen          String?
+  fechaIngreso    DateTime @default(now())
+  
+  agencia         Agencia @relation(fields: [agenciaId], references: [id])
+  
+  @@map("vehiculos")
+}
+
+// Metrics and KPIs
+model MetricaVenta {
+  id                    Int      @id @default(autoincrement())
+  agenciaId             Int
+  mes                   Int
+  year                  Int
+  ventasRealizadas      Int      @default(0)
+  metaVentas            Int
+  prospectosProcesados  Int      @default(0)
+  tasaConversion        Decimal? @db.Decimal(5, 2) // percentage
+  utilidadPromedio      Decimal? @db.Decimal(12, 2)
+  vendedoresActivos     Int      @default(0)
+  optimizacionesProcesadas Int   @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  agencia               Agencia  @relation(fields: [agenciaId], references: [id])
+  
+  @@unique([agenciaId, mes, year])
+  @@map("metricas_ventas")
+}
+
+// ================== NUEVAS FUNCIONALIDADES GERENCIALES ==================
+
+// Metas y Objetivos por Vendedor
+model MetaVendedor {
+  id              Int      @id @default(autoincrement())
+  vendedorId      String
+  mes             Int
+  year            Int
+  metaAutos       Int      @default(0)
+  metaIngresos    Decimal  @default(0) @db.Decimal(12, 2)
+  autosVendidos   Int      @default(0)
+  ingresosReales  Decimal  @default(0) @db.Decimal(12, 2)
+  porcentajeCumplimiento Decimal @default(0) @db.Decimal(5, 2)
+  especialidad    String? // "SUVs Premium", "Autos Compactos", etc.
+  activo          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  vendedor        User     @relation(fields: [vendedorId], references: [id])
+  
+  @@unique([vendedorId, mes, year])
+  @@map("metas_vendedores")
+}
+
+// Esquemas de Comisiones Personalizables
+model EsquemaComision {
+  id                    Int      @id @default(autoincrement())
+  vendedorId            String
+  nombre                String   // "Senior", "Regular", "En Desarrollo"
+  porcentajeBase        Decimal  @db.Decimal(5, 4) // ej: 0.0500 = 5%
+  bonoVolumen           Decimal  @default(0) @db.Decimal(10, 2) // pesos por auto extra
+  bonoMargen            Decimal  @default(0) @db.Decimal(10, 2) // pesos por margen alto
+  incentiveReferencia   Decimal  @default(0) @db.Decimal(10, 2) // pesos por referencia
+  incentiveMejora       Decimal  @default(0) @db.Decimal(10, 2) // pesos por mejora mensual
+  fechaInicio           DateTime @default(now())
+  fechaFin              DateTime?
+  activo                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  vendedor              User     @relation(fields: [vendedorId], references: [id])
+  comisionesGeneradas   RegistroComision[]
+  
+  @@map("esquemas_comisiones")
+}
+
+// Registro de Comisiones Generadas
+model RegistroComision {
+  id                Int      @id @default(autoincrement())
+  vendedorId        String
+  esquemaComisionId Int
+  prospectoId       Int?
+  mes               Int
+  year              Int
+  tipoComision      String   // "base", "volumen", "margen", "referencia", "mejora"
+  montoVenta        Decimal  @db.Decimal(12, 2)
+  porcentaje        Decimal  @db.Decimal(5, 4)
+  montoComision     Decimal  @db.Decimal(10, 2)
+  pagado            Boolean  @default(false)
+  fechaPago         DateTime?
+  notas             String?
+  createdAt         DateTime @default(now())
+  
+  vendedor          User     @relation(fields: [vendedorId], references: [id])
+  esquemaComision   EsquemaComision @relation(fields: [esquemaComisionId], references: [id])
+  prospecto         Prospecto? @relation(fields: [prospectoId], references: [id])
+  
+  @@map("registros_comisiones")
+}
+
+// Reasignaciones de Leads
+model ReasignacionLead {
+  id                  Int      @id @default(autoincrement())
+  prospectoId         Int
+  vendedorAnteriorId  String
+  vendedorNuevoId     String
+  gerenteId           String   // Quien autorizó la reasignación
+  motivoReasignacion  String
+  comentarios         String?
+  fechaReasignacion   DateTime @default(now())
+  
+  prospecto           Prospecto @relation(fields: [prospectoId], references: [id])
+  vendedorAnterior    User     @relation("ReasignacionesAnterior", fields: [vendedorAnteriorId], references: [id])
+  vendedorNuevo       User     @relation("ReasignacionesNuevo", fields: [vendedorNuevoId], references: [id])
+  gerente             User     @relation("ReasignacionesGerente", fields: [gerenteId], references: [id])
+  
+  @@map("reasignaciones_leads")
+}
+
+// Automatizaciones y Workflows
+model AutomatizacionWorkflow {
+  id              Int      @id @default(autoincrement())
+  agenciaId       Int
+  nombre          String
+  tipoTrigger     String   // "tiempo_sin_contacto", "lead_entrada", "etapa_sppc", "vendedor_sobrecarga"
+  condiciones     String   @db.Text // JSON con condiciones
+  acciones        String   @db.Text // JSON con acciones a ejecutar
+  activo          Boolean  @default(true)
+  ultimaEjecucion DateTime?
+  vecesEjecutado  Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  agencia         Agencia  @relation(fields: [agenciaId], references: [id])
+  ejecuciones     EjecucionWorkflow[]
+  
+  @@map("automatizaciones_workflows")
+}
+
+// Log de Ejecuciones de Workflows
+model EjecucionWorkflow {
+  id            Int      @id @default(autoincrement())
+  workflowId    Int
+  prospectoId   Int?
+  vendedorId    String?
+  resultado     String   // "exitoso", "error", "omitido"
+  detalles      String?  @db.Text
+  fechaEjecucion DateTime @default(now())
+  
+  workflow      AutomatizacionWorkflow @relation(fields: [workflowId], references: [id])
+  prospecto     Prospecto? @relation(fields: [prospectoId], references: [id])
+  vendedor      User?      @relation("WorkflowEjecuciones", fields: [vendedorId], references: [id])
+  
+  @@map("ejecuciones_workflows")
+}
+
+// Forecasting y Proyecciones
+model Forecast {
+  id                    Int      @id @default(autoincrement())
+  agenciaId             Int
+  mes                   Int
+  year                  Int
+  metaVentas            Int
+  forecastVentas        Int
+  confianzaPorcentaje   Decimal  @db.Decimal(5, 2)
+  ingresosProyectados   Decimal  @db.Decimal(12, 2)
+  comisionesProyectadas Decimal  @db.Decimal(12, 2)
+  factoresConsiderados  String   @db.Text // JSON con factores
+  fechaGeneracion       DateTime @default(now())
+  ultimaActualizacion   DateTime @updatedAt
+  
+  agencia               Agencia  @relation(fields: [agenciaId], references: [id])
+  forecastVendedores    ForecastVendedor[]
+  
+  @@unique([agenciaId, mes, year])
+  @@map("forecasts")
+}
+
+// Forecast Individual por Vendedor
+model ForecastVendedor {
+  id                Int      @id @default(autoincrement())
+  forecastId        Int
+  vendedorId        String
+  metaIndividual    Int
+  forecastIndividual Int
+  confianza         Decimal  @db.Decimal(5, 2)
+  ingresosProyectados Decimal @db.Decimal(12, 2)
+  comisionProyectada Decimal  @db.Decimal(10, 2)
+  
+  forecast          Forecast @relation(fields: [forecastId], references: [id])
+  vendedor          User     @relation("ForecastVendedor", fields: [vendedorId], references: [id])
+  
+  @@unique([forecastId, vendedorId])
+  @@map("forecast_vendedores")
+}
+
+// Sesiones de Coaching
+model SesionCoaching {
+  id              Int      @id @default(autoincrement())
+  vendedorId      String
+  gerenteId       String
+  tipoCoaching    String   // "conversion", "seguimiento", "cierre", "presentacion"
+  problemasIdentificados String @db.Text // JSON
+  planMejora      String   @db.Text
+  fechaSesion     DateTime
+  duracion        Int?     // minutos
+  resultados      String?  @db.Text
+  proximaSesion   DateTime?
+  completado      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  vendedor        User     @relation("CoachingVendedor", fields: [vendedorId], references: [id])
+  gerente         User     @relation("CoachingGerente", fields: [gerenteId], references: [id])
+  
+  @@map("sesiones_coaching")
+}
+
+// Grabaciones de Conversaciones (Para transcripción y análisis)
+model GrabacionConversacion {
+  id              Int      @id @default(autoincrement())
+  prospectoId     Int
+  vendedorId      String
+  tipoLlamada     String   // "prospectacion", "seguimiento", "cierre", "postventa"
+  duracion        Int      // segundos
+  rutaArchivo     String?  // URL del archivo de audio
+  transcripcion   String?  @db.Text
+  analisisIA      String?  @db.Text // JSON con análisis de IA
+  fechaGrabacion  DateTime @default(now())
+  procesado       Boolean  @default(false)
+  
+  prospecto       Prospecto @relation(fields: [prospectoId], references: [id])
+  vendedor        User      @relation("GrabacionesVendedor", fields: [vendedorId], references: [id])
+  
+  @@map("grabaciones_conversaciones")
+}
+
+// Reportes Gerenciales Pre-configurados
+model ReporteGerencial {
+  id              Int      @id @default(autoincrement())
+  agenciaId       Int
+  tipoReporte     String   // "rendimiento_equipo", "roi_marketing", "analisis_estacional"
+  nombreReporte   String
+  parametros      String   @db.Text // JSON con parámetros
+  fechaGeneracion DateTime
+  rutaArchivo     String?  // URL del reporte generado
+  compartidoCon   String?  // JSON con IDs de usuarios
+  programado      Boolean  @default(false)
+  frecuencia      String?  // "diario", "semanal", "mensual"
+  createdAt       DateTime @default(now())
+  
+  agencia         Agencia  @relation(fields: [agenciaId], references: [id])
+  
+  @@map("reportes_gerenciales")
+}
+
+// Alertas del Sistema
+model AlertaSistema {
+  id           Int      @id @default(autoincrement())
+  usuarioId    String
+  tipoAlerta   String   // "lead_critico", "sobrecarga_vendedor", "meta_riesgo", "forecast_cambio"
+  prioridad    String   // "alta", "media", "baja"
+  titulo       String
+  mensaje      String
+  datos        String?  @db.Text // JSON con datos adicionales
+  leida        Boolean  @default(false)
+  fechaCreacion DateTime @default(now())
+  fechaLectura DateTime?
+  accionTomada String?
+  
+  usuario      User     @relation("AlertasUsuario", fields: [usuarioId], references: [id])
+  
+  @@map("alertas_sistema")
+}
+
+// Configuration and Settings
+model Configuracion {
+  id       Int    @id @default(autoincrement())
+  clave    String @unique
+  valor    String
+  tipo     String @default("string") // "string", "number", "boolean", "json"
+  descripcion String?
+  updatedAt DateTime @updatedAt
+  
+  @@map("configuraciones")
+}
+
+// File Management
+model Archivo {
+  id            Int      @id @default(autoincrement())
+  nombreOriginal String
+  nombreArchivo  String
+  rutaArchivo    String
+  tipoMime       String
+  tamano         BigInt
+  categoria      String?  // "reportes", "imagenes", "documentos"
+  uploadedBy     String?
+  createdAt      DateTime @default(now())
+  
+  @@map("archivos")
+}
