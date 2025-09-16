@@ -58,14 +58,14 @@ export async function GET(request: NextRequest) {
     });
 
     const prospectosSummary = {
-      elite: prospectoStats.find(p => p.clasificacion === 'Elite')?._count.id || 0,
-      calificado: prospectoStats.find(p => p.clasificacion === 'Calificado')?._count.id || 0,
-      amadurar: prospectoStats.find(p => p.clasificacion === 'A Madurar')?._count.id || 0,
-      explorador: prospectoStats.find(p => p.clasificacion === 'Explorador')?._count.id || 0,
+      elite: prospectoStats.find((p: { clasificacion: string; _count: { id: number } }) => p.clasificacion === 'Elite')?._count.id || 0,
+      calificado: prospectoStats.find((p: { clasificacion: string; _count: { id: number } }) => p.clasificacion === 'Calificado')?._count.id || 0,
+      amadurar: prospectoStats.find((p: { clasificacion: string; _count: { id: number } }) => p.clasificacion === 'A Madurar')?._count.id || 0,
+      explorador: prospectoStats.find((p: { clasificacion: string; _count: { id: number } }) => p.clasificacion === 'Explorador')?._count.id || 0,
       total: 0,
     };
     
-    prospectosSummary.total = Object.values(prospectosSummary).reduce((a, b) => a + b, 0) - prospectosSummary.total;
+    prospectosSummary.total = Object.values(prospectosSummary).reduce((a: number, b: number) => a + b, 0) - prospectosSummary.total;
 
     // Get metrics based on access level
     let metricasFilter: any = {};
