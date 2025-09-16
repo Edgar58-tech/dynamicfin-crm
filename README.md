@@ -129,3 +129,4 @@ Proyecto desarrollado por **DynamicFin** - Sistema propietario
 ### 💡 **Desarrollado con ❤️ por DynamicFin Team**
 *Sistema de Perfilamiento y Potencial de Cliente (SPPC)*
 "# Deploy trigger" 
+"# Deploy trigger" 
