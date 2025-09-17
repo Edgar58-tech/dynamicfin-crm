@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
           where: { marcaId },
           select: { id: true },
         });
-        filter.agenciaId = { in: agencias.map(a => a.id) };
+        filter.agenciaId = { in: agencias.map((a: { id: number }) => a.id) };
       }
     } else if (rol === 'DIRECTOR_GENERAL') {
       if (grupoId) {
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
           },
           select: { id: true },
         });
-        filter.agenciaId = { in: agencias.map(a => a.id) };
+        filter.agenciaId = { in: agencias.map((a: { id: number }) => a.id) };
       }
     }
     // DYNAMICFIN_ADMIN has no filter - can see all
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
           where: { marcaId },
           select: { id: true },
         });
-        metricasFilter.agenciaId = { in: agencias.map(a => a.id) };
+        metricasFilter.agenciaId = { in: agencias.map((a: { id: number }) => a.id) };
       }
     } else if (rol === 'DIRECTOR_GENERAL') {
       if (grupoId) {
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
           },
           select: { id: true },
         });
-        metricasFilter.agenciaId = { in: agencias.map(a => a.id) };
+        metricasFilter.agenciaId = { in: agencias.map((a: { id: number }) => a.id) };
       }
     }
 
