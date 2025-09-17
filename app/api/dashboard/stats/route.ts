@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
           where: { marcaId },
           select: { id: true },
         });
-        filter.agenciaId = { in: agencias.map((a: { id: string }) => a.id) };
+        filter.agenciaId = { in: agencias.map(a => a.id) };
       }
     } else if (rol === 'DIRECTOR_GENERAL') {
       if (grupoId) {
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
           },
           select: { id: true },
         });
-        filter.agenciaId = { in: agencias.map((a: { id: string }) => a.id) };
+        filter.agenciaId = { in: agencias.map(a => a.id) };
       }
     }
     // DYNAMICFIN_ADMIN has no filter - can see all
@@ -58,10 +58,10 @@ export async function GET(request: NextRequest) {
     });
 
     const prospectosSummary = {
-      elite: prospectoStats.find((p: { clasificacion: string; _count: { id: number } }) => p.clasificacion === 'Elite')?._count.id || 0,
-      calificado: prospectoStats.find((p: { clasificacion: string; _count: { id: number } }) => p.clasificacion === 'Calificado')?._count.id || 0,
-      amadurar: prospectoStats.find((p: { clasificacion: string; _count: { id: number } }) => p.clasificacion === 'A Madurar')?._count.id || 0,
-      explorador: prospectoStats.find((p: { clasificacion: string; _count: { id: number } }) => p.clasificacion === 'Explorador')?._count.id || 0,
+      elite: prospectoStats.find(p => p.clasificacion === 'Elite')?._count.id || 0,
+      calificado: prospectoStats.find(p => p.clasificacion === 'Calificado')?._count.id || 0,
+      amadurar: prospectoStats.find(p => p.clasificacion === 'A Madurar')?._count.id || 0,
+      explorador: prospectoStats.find(p => p.clasificacion === 'Explorador')?._count.id || 0,
       total: 0,
     };
     
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
           where: { marcaId },
           select: { id: true },
         });
-        metricasFilter.agenciaId = { in: agencias.map((a: { id: string }) => a.id) };
+        metricasFilter.agenciaId = { in: agencias.map(a => a.id) };
       }
     } else if (rol === 'DIRECTOR_GENERAL') {
       if (grupoId) {
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
           },
           select: { id: true },
         });
-        metricasFilter.agenciaId = { in: agencias.map((a: { id: string }) => a.id) };
+        metricasFilter.agenciaId = { in: agencias.map(a => a.id) };
       }
     }
 
