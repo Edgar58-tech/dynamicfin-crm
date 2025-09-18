@@ -29,6 +29,7 @@ import AlertPanel from './alert-panel';
 import DataTable from './data-table';
 import GrabacionesDashboard from './grabaciones-dashboard';
 import CentroLeadsDashboard from './centro-leads-dashboard';
+import CrmMetricsWidget from './crm-metrics-widget';
 import { useToast } from '@/components/ui/use-toast';
 
 interface DashboardData {
@@ -232,7 +233,7 @@ export default function DashboardGerencialClient({ initialData }: DashboardGeren
 
       {/* Dashboard principal con pestañas */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="resumen" className="gap-2">
             <BarChart3 className="w-4 h-4" />
             Resumen
@@ -244,6 +245,10 @@ export default function DashboardGerencialClient({ initialData }: DashboardGeren
           <TabsTrigger value="grabaciones" className="gap-2">
             <Brain className="w-4 h-4" />
             IA & Grabaciones
+          </TabsTrigger>
+          <TabsTrigger value="crm-metrics" className="gap-2">
+            <Activity className="w-4 h-4" />
+            CRM Externo
           </TabsTrigger>
           <TabsTrigger value="pipeline" className="gap-2">
             <Target className="w-4 h-4" />
@@ -377,6 +382,17 @@ export default function DashboardGerencialClient({ initialData }: DashboardGeren
               exit={{ opacity: 0, x: -20 }}
             >
               <GrabacionesDashboard />
+            </motion.div>
+          </TabsContent>
+
+          <TabsContent value="crm-metrics" className="space-y-6">
+            <motion.div
+              key="crm-metrics"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <CrmMetricsWidget />
             </motion.div>
           </TabsContent>
 

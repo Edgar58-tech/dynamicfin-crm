@@ -111,6 +111,9 @@ model Agencia {
   forecasts     Forecast[]
   reportes      ReporteGerencial[]
   
+  // Relaciones CRM externo
+  configuracionesCrm CrmConfiguration[]
+  
   @@map("agencias")
 }
 
@@ -184,6 +187,9 @@ model User {
   visitasShowroomRecibidas  VisitaShowroom[] @relation("VisitasShowroomCoordinador")
   alertasDesbalance         AlertaDesbalance[] @relation("AlertasDesbalanceUsuario")
   alertasDesbalanceVendedor AlertaDesbalance[] @relation("AlertasDesbalanceVendedor")
+  
+  // Relaciones CRM externo
+  crmSyncLogs               CrmSyncLog[] @relation("CrmSyncLogUsuario")
   
   @@map("usuarios")
 }
@@ -814,4 +820,177 @@ model Archivo {
   createdAt      DateTime @default(now())
   
   @@map("archivos")
+}
+
+// ================== SISTEMA CRM EXTERNO ==================
+
+// Configuraciones de CRM por Agencia
+model CrmConfiguration {
+  id                      Int      @id @default(autoincrement())
+  agenciaId               Int
+  nombre                  String   // "Salesforce Principal", "HubSpot Backup"
+  crmTipo                 String   // "salesforce", "hubspot", "pipedrive", "zoho", "dynamics", "custom"
+  crmApiUrl               String
+  crmApiKey               String
+  crmSecretKey            String
+  webhookUrl              String?
+  webhookSecret           String?
+  activo                  Boolean  @default(true)
+  sincronizacionBidireccional Boolean @default(true)
+  frecuenciaSincronizacion Int     @default(15) // minutos
+  ultimaSincronizacion    DateTime?
+  configuracionAvanzada   String?  @db.Text // JSON con config específica del CRM
+  limitesAPI              String?  @db.Text // JSON con límites del proveedor
+  credencialesExpiran     DateTime?
+  notificarExpiracion     Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  
+  agencia                 Agencia  @relation(fields: [agenciaId], references: [id], onDelete: Cascade)
+  mapeosCampos            CrmFieldMapping[]
+  logsSync                CrmSyncLog[]
+  configuracionesWebhook  WebhookConfiguration[]
+  metricas                CrmMetrics[]
+  
+  @@map("crm_configurations")
+}
+
+// Mapeo detallado de campos entre DynamicFin y CRM
+model CrmFieldMapping {
+  id                    Int      @id @default(autoincrement())
+  crmConfigurationId    Int
+  entidad               String   // "prospecto", "vehiculo", "venta", "contacto", "interaccion"
+  campoDynamicFin       String   // Campo en nuestra base de datos
+  campoCrm              String   // Campo correspondiente en el CRM
+  tipoDato              String   // "string", "number", "date", "boolean", "json"
+  direccionSincronizacion String @default("bidireccional") // "dinamicfin_to_crm", "crm_to_dinamicfin", "bidireccional"
+  transformacion        String?  @db.Text // JSON con reglas de transformación
+  requerido             Boolean  @default(false)
+  valorPorDefecto       String?  // Valor por defecto si el campo está vacío
+  validacion            String?  @db.Text // JSON con reglas de validación
+  activo                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  crmConfiguration      CrmConfiguration @relation(fields: [crmConfigurationId], references: [id], onDelete: Cascade)
+  
+  @@unique([crmConfigurationId, entidad, campoDynamicFin])
+  @@map("crm_field_mappings")
+}
+
+// Log detallado de sincronizaciones CRM
+model CrmSyncLog {
+  id                    Int      @id @default(autoincrement())
+  crmConfigurationId    Int
+  tipoOperacion         String   // "sync_to_crm", "sync_from_crm", "webhook_received", "manual_sync"
+  entidad               String   // "prospectos", "vehiculos", "ventas", "contactos"
+  accion                String   // "create", "update", "delete", "bulk_sync"
+  estadoSync            String   // "exitoso", "error", "parcial", "en_proceso"
+  registrosProcesados   Int      @default(0)
+  registrosExitosos     Int      @default(0)
+  registrosFallidos     Int      @default(0)
+  tiempoEjecucion       Decimal? @db.Decimal(8, 3) // segundos
+  detalleOperacion      String?  @db.Text // JSON con detalles de la operación
+  errores               String?  @db.Text // JSON con errores específicos
+  datosEnviados         String?  @db.Text // JSON con datos enviados (para debug)
+  respuestaCrm          String?  @db.Text // JSON con respuesta del CRM
+  codigoRespuesta       Int?     // HTTP status code
+  usuarioId             String?  // Usuario que inició la sync (si fue manual)
+  ipOrigen              String?  // IP desde donde se inició
+  fechaInicio           DateTime @default(now())
+  fechaFin              DateTime?
+  notificacionEnviada   Boolean  @default(false)
+  
+  crmConfiguration      CrmConfiguration @relation(fields: [crmConfigurationId], references: [id], onDelete: Cascade)
+  usuario               User?    @relation("CrmSyncLogUsuario", fields: [usuarioId], references: [id])
+  
+  @@index([fechaInicio])
+  @@index([estadoSync])
+  @@index([crmConfigurationId, estadoSync])
+  @@map("crm_sync_logs")
+}
+
+// Configuración de Webhooks CRM
+model WebhookConfiguration {
+  id                    Int      @id @default(autoincrement())
+  crmConfigurationId    Int
+  tipoWebhook           String   // "entrante", "saliente", "bidireccional"
+  evento                String   // "prospecto_creado", "venta_cerrada", "contacto_actualizado", "lead_qualified"
+  url                   String   // URL del webhook
+  metodoHttp            String   @default("POST") // "POST", "PUT", "PATCH"
+  headers               String?  @db.Text // JSON con headers custom
+  secretoValidacion     String?  // Secret para validar webhooks entrantes
+  formatoPayload        String   @default("json") // "json", "xml", "form"
+  templatePayload       String?  @db.Text // Template del payload a enviar
+  condicionesFiltro     String?  @db.Text // JSON con condiciones para ejecutar webhook
+  reintentosMaximos     Int      @default(3)
+  tiempoEsperaReintentos Int     @default(30) // segundos
+  activo                Boolean  @default(true)
+  ultimaEjecucion       DateTime?
+  vecesEjecutado        Int      @default(0)
+  vecesExitoso          Int      @default(0)
+  vecesFallido          Int      @default(0)
+  observaciones         String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  crmConfiguration      CrmConfiguration @relation(fields: [crmConfigurationId], references: [id], onDelete: Cascade)
+  ejecuciones           WebhookExecution[]
+  
+  @@map("webhook_configurations")
+}
+
+// Log de ejecuciones de webhooks
+model WebhookExecution {
+  id                    Int      @id @default(autoincrement())
+  webhookConfigurationId Int
+  tipoEjecucion         String   // "automatica", "manual", "reintento"
+  payloadEnviado        String?  @db.Text // JSON con payload enviado
+  payloadRecibido       String?  @db.Text // JSON con payload recibido
+  respuestaWebhook      String?  @db.Text // Respuesta del endpoint
+  codigoRespuesta       Int?     // HTTP status code
+  tiempoRespuesta       Decimal? @db.Decimal(8, 3) // milisegundos
+  estadoEjecucion       String   // "exitoso", "fallido", "timeout", "reintentando"
+  errorDetalle          String?  @db.Text // Detalle del error si falló
+  numeroReintento       Int      @default(0) // 0 = primer intento
+  ipOrigen              String?  // IP desde donde vino el webhook (para entrantes)
+  userAgent             String?  // User agent del sistema que envió
+  fechaEjecucion        DateTime @default(now())
+  fechaProximoReintento DateTime?
+  
+  webhookConfiguration  WebhookConfiguration @relation(fields: [webhookConfigurationId], references: [id], onDelete: Cascade)
+  
+  @@index([fechaEjecucion])
+  @@index([estadoEjecucion])
+  @@map("webhook_executions")
+}
+
+// Métricas de rendimiento CRM
+model CrmMetrics {
+  id                    Int      @id @default(autoincrement())
+  crmConfigurationId    Int
+  fecha                 DateTime @db.Date
+  totalSincronizaciones Int      @default(0)
+  sincronizacionesExitosas Int   @default(0)
+  sincronizacionesFallidas Int   @default(0)
+  prospectosSincronizados Int    @default(0)
+  vehiculosSincronizados Int     @default(0)
+  ventasSincronizadas   Int      @default(0)
+  contactosSincronizados Int     @default(0)
+  webhooksEnviados      Int      @default(0)
+  webhooksRecibidos     Int      @default(0)
+  tiempoPromedioSync    Decimal? @db.Decimal(8, 3) // segundos promedio
+  rateLimitHits         Int      @default(0) // Cuántas veces llegamos al límite de API
+  errorRate             Decimal? @db.Decimal(5, 2) // Porcentaje de error
+  datosVolumen          Decimal? @db.Decimal(12, 2) // MB de datos transferidos
+  costoOperacional      Decimal? @db.Decimal(10, 2) // Costo por uso de API
+  uptime                Decimal? @db.Decimal(5, 2) // Porcentaje uptime del CRM
+  latenciaPromedio      Int?     // millisegundos promedio de respuesta
+  createdAt             DateTime @default(now())
+  
+  crmConfiguration      CrmConfiguration @relation(fields: [crmConfigurationId], references: [id], onDelete: Cascade)
+  
+  @@unique([crmConfigurationId, fecha])
+  @@index([fecha])
+  @@map("crm_metrics")
 }
