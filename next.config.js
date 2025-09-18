@@ -1,12 +1,11 @@
-const path = require('path');
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  distDir: process.env.NEXT_DIST_DIR || '.next',
-  output: process.env.NEXT_OUTPUT_MODE,
-  experimental: {
-    outputFileTracingRoot: path.join(__dirname, '../'),
-  },
+  // Asegura que la carpeta de build sea siempre .next
+  distDir: ".next",
+  // Desactiva cualquier feature experimental que pueda romper en Vercel
+  experimental: {},
+  reactStrictMode: true,
+  swcMinify: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
