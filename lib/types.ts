@@ -75,3 +75,69 @@ export interface ProspectoSummary {
   explorador: number;
   total: number;
 }
+
+// Centro de Leads Types
+export type OrigenLead = 'LLAMADA_ENTRANTE' | 'VISITA_SHOWROOM' | 'OTROS';
+export type EstadoAsignacion = 'PENDIENTE' | 'ASIGNADO' | 'CONTACTADO';
+export type EstadoProspecto = 'Nuevo' | 'PENDIENTE_CALIFICACION' | 'Contactado' | 'Calificado' | 'Perdido' | 'Vendido';
+export type NivelUrgencia = 'BAJA' | 'MEDIA' | 'ALTA';
+export type TipoDesbalance = 'CARGA_ALTA' | 'CARGA_DESIGUAL' | 'VENDEDOR_SOBRECARGADO';
+export type EstadoAlerta = 'ACTIVA' | 'EN_PROCESO' | 'RESUELTA' | 'IGNORADA';
+
+// Pendientes de Calificación Types
+export type AlertaTiempoPendiente = 'NORMAL' | 'AMARILLA' | 'NARANJA' | 'ROJA';
+
+export interface ProspectoPendienteCalificacion {
+  id: number;
+  nombre: string;
+  apellido?: string;
+  telefono?: string;
+  email?: string;
+  vehiculoInteres?: string;
+  origenLead?: string;
+  fechaAsignacion?: Date;
+  horasEspera?: number;
+  nivelUrgencia?: NivelUrgencia;
+  alertaTiempo: AlertaTiempoPendiente;
+  coordinadorNombre?: string;
+  observaciones?: string;
+}
+
+export interface VendedorGuardiaInfo {
+  id: string;
+  nombre: string;
+  apellido?: string;
+  cargaActual: number;
+  metaDelDia: number;
+  activo: boolean;
+  horaInicio: string;
+  horaFin: string;
+}
+
+export interface EstadisticasCentroLeads {
+  llamadasHoy: number;
+  visitasHoy: number;
+  prospectsGenerados: number;
+  vendedoresGuardia: number;
+  promedioAsignacion: number; // en minutos
+}
+
+export interface AlertaDesbalanceInfo {
+  tipoDesbalance: TipoDesbalance;
+  vendedorAfectado?: {
+    id: string;
+    nombre: string;
+    carga: number;
+  };
+  diferenciaDetectada: number;
+  sugerenciaAccion: string;
+  fechaDeteccion: Date;
+}
+
+export interface AsignacionLeadRequest {
+  prospectoId: number;
+  vendedorId: string;
+  prioridad: 'BAJA' | 'NORMAL' | 'ALTA' | 'URGENTE';
+  metodo: 'BALANCEADO' | 'MANUAL' | 'URGENTE';
+  observaciones?: string;
+}

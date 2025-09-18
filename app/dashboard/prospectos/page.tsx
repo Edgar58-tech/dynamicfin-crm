@@ -225,17 +225,54 @@ export default function ProspectosPage() {
     apellido: '',
     email: '',
     telefono: '',
-    vehiculoInteres: '',
+    vehiculoInteresId: '',
+    vehiculoInteresTxt: '', // Para compatibilidad con entrada manual
     clasificacion: 'Explorador'
   });
 
+  // Estados para catálogo de vehículos
+  const [vehiculosCatalogo, setVehiculosCatalogo] = useState<Array<{value: string, label: string, marca: string}>>([]);
+  const [loadingCatalogo, setLoadingCatalogo] = useState(false);
+  const [searchVehiculo, setSearchVehiculo] = useState('');
+  const [showManualInput, setShowManualInput] = useState(false);
+
   const handleNuevoProspecto = () => {
     setShowNuevoProspectoModal(true);
+    fetchVehiculosCatalogo(); // Cargar catálogo al abrir modal
+  };
+
+  // Función para obtener catálogo de vehículos
+  const fetchVehiculosCatalogo = async () => {
+    try {
+      setLoadingCatalogo(true);
+      const params = new URLSearchParams();
+      if (searchVehiculo) params.set('search', searchVehiculo);
+      
+      const response = await fetch(`/api/vehiculos-catalogo/dropdown?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setVehiculosCatalogo(data.options || []);
+      }
+    } catch (error) {
+      console.error('Error fetching vehicle catalog:', error);
+    } finally {
+      setLoadingCatalogo(false);
+    }
   };
 
   const handleGuardarProspecto = () => {
     // Simular guardado
     const nuevoId = prospectos.length + 1;
+    
+    // Determinar el vehículo de interés (catálogo o texto manual)
+    let vehiculoInteres = '';
+    if (nuevoProspecto.vehiculoInteresId) {
+      const vehiculoSeleccionado = vehiculosCatalogo.find(v => v.value === nuevoProspecto.vehiculoInteresId);
+      vehiculoInteres = vehiculoSeleccionado?.label || '';
+    } else if (nuevoProspecto.vehiculoInteresTxt) {
+      vehiculoInteres = nuevoProspecto.vehiculoInteresTxt;
+    }
+    
     const prospecto: Prospecto = {
       id: nuevoId,
       nombre: nuevoProspecto.nombre,
@@ -244,7 +281,7 @@ export default function ProspectosPage() {
       telefono: nuevoProspecto.telefono,
       clasificacion: nuevoProspecto.clasificacion,
       calificacionTotal: Math.random() * 100,
-      vehiculoInteres: nuevoProspecto.vehiculoInteres,
+      vehiculoInteres: vehiculoInteres,
       estatus: 'Activo',
       fechaContacto: new Date().toISOString().split('T')[0]
     };
@@ -256,9 +293,12 @@ export default function ProspectosPage() {
       apellido: '',
       email: '',
       telefono: '',
-      vehiculoInteres: '',
+      vehiculoInteresId: '',
+      vehiculoInteresTxt: '',
       clasificacion: 'Explorador'
     });
+    setShowManualInput(false);
+    setSearchVehiculo('');
     alert('✅ Prospecto creado exitosamente!');
   };
 
@@ -892,12 +932,66 @@ Cliente: Sí, tengo buen historial crediticio y puedo dar un enganche del 30%.`;
               </div>
               
               <div>
-                <label className="block text-sm font-medium mb-1">Vehículo de Interés</label>
-                <Input 
-                  value={nuevoProspecto.vehiculoInteres}
-                  onChange={(e) => setNuevoProspecto({...nuevoProspecto, vehiculoInteres: e.target.value})}
-                  placeholder="Ej: Audi A4 2024"
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium">Vehículo de Interés</label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setShowManualInput(!showManualInput)}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    {showManualInput ? 'Usar Catálogo' : 'Entrada Manual'}
+                  </Button>
+                </div>
+                
+                {!showManualInput ? (
+                  <div>
+                    <Select 
+                      value={nuevoProspecto.vehiculoInteresId} 
+                      onValueChange={(value) => setNuevoProspecto({...nuevoProspecto, vehiculoInteresId: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar vehículo del catálogo..." />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {loadingCatalogo ? (
+                          <div className="p-4 text-center text-sm text-slate-500">
+                            Cargando catálogo...
+                          </div>
+                        ) : vehiculosCatalogo.length === 0 ? (
+                          <div className="p-4 text-center text-sm text-slate-500">
+                            No hay vehículos en el catálogo
+                          </div>
+                        ) : (
+                          vehiculosCatalogo.map(vehiculo => (
+                            <SelectItem key={vehiculo.value} value={vehiculo.value}>
+                              <span className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {vehiculo.marca}
+                                </Badge>
+                                {vehiculo.label}
+                              </span>
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Selecciona del catálogo estandarizado o usa "Entrada Manual" para vehículos no listados.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <Input 
+                      value={nuevoProspecto.vehiculoInteresTxt}
+                      onChange={(e) => setNuevoProspecto({...nuevoProspecto, vehiculoInteresTxt: e.target.value})}
+                      placeholder="Ej: Vehículo personalizado o no catalogado"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Para vehículos no disponibles en el catálogo estándar.
+                    </p>
+                  </div>
+                )}
               </div>
               
               <div>
@@ -923,7 +1017,13 @@ Cliente: Sí, tengo buen historial crediticio y puedo dar un enganche del 30%.`;
               <Button 
                 onClick={handleGuardarProspecto}
                 className="flex-1 bg-blue-600 hover:bg-blue-700"
-                disabled={!nuevoProspecto.nombre || !nuevoProspecto.apellido || !nuevoProspecto.email || !nuevoProspecto.telefono}
+                disabled={
+                  !nuevoProspecto.nombre || 
+                  !nuevoProspecto.apellido || 
+                  !nuevoProspecto.email || 
+                  !nuevoProspecto.telefono ||
+                  (!nuevoProspecto.vehiculoInteresId && !nuevoProspecto.vehiculoInteresTxt)
+                }
               >
                 Guardar Prospecto
               </Button>

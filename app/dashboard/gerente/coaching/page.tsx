@@ -85,6 +85,14 @@ export default function CoachingPage() {
   const [nuevoCoaching, setNuevoCoaching] = useState<PlanCoaching | null>(null);
   const [loading, setLoading] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todos');
+  
+  // Estados para el formulario de coaching
+  const [formData, setFormData] = useState({
+    tipoCoaching: '',
+    fechaSesion: '',
+    objetivos: ''
+  });
+  const [currentVendedorId, setCurrentVendedorId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCoachingData();
@@ -260,19 +268,30 @@ export default function CoachingPage() {
   };
 
   const programarSesionCoaching = async () => {
-    if (!nuevoCoaching) return;
+    if (!currentVendedorId || !formData.tipoCoaching || !formData.fechaSesion || !formData.objetivos) {
+      toast.error('Por favor completa todos los campos');
+      return;
+    }
 
     try {
-      // Aquí iría la llamada a la API
+      const coachingData = {
+        vendedorId: currentVendedorId,
+        tipoCoaching: formData.tipoCoaching,
+        objetivos: [formData.objetivos],
+        fechaSesion: formData.fechaSesion,
+        duracionEstimada: 60
+      };
+
       const response = await fetch('/api/gerente/coaching/programar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nuevoCoaching)
+        body: JSON.stringify(coachingData)
       });
 
       if (response.ok) {
         toast.success('Sesión de coaching programada exitosamente');
-        setNuevoCoaching(null);
+        setFormData({ tipoCoaching: '', fechaSesion: '', objetivos: '' });
+        setCurrentVendedorId(null);
         fetchCoachingData(); // Recargar datos
       } else {
         toast.error('Error al programar sesión de coaching');
@@ -704,7 +723,11 @@ export default function CoachingPage() {
                   {vendedor.estadoRendimiento !== 'excelente' && (
                     <Dialog>
                       <DialogTrigger asChild>
-                        <Button size="sm" className="flex-1">
+                        <Button 
+                          size="sm" 
+                          className="flex-1"
+                          onClick={() => setCurrentVendedorId(vendedor.id)}
+                        >
                           <GraduationCap className="w-4 h-4 mr-1" />
                           Coaching
                         </Button>
@@ -720,7 +743,10 @@ export default function CoachingPage() {
                         <div className="space-y-4">
                           <div>
                             <Label>Tipo de Coaching</Label>
-                            <Select>
+                            <Select 
+                              value={formData.tipoCoaching} 
+                              onValueChange={(value) => setFormData(prev => ({...prev, tipoCoaching: value}))}
+                            >
                               <SelectTrigger>
                                 <SelectValue placeholder="Selecciona el tipo..." />
                               </SelectTrigger>
@@ -736,7 +762,11 @@ export default function CoachingPage() {
 
                           <div>
                             <Label>Fecha y Hora</Label>
-                            <Input type="datetime-local" />
+                            <Input 
+                              type="datetime-local" 
+                              value={formData.fechaSesion}
+                              onChange={(e) => setFormData(prev => ({...prev, fechaSesion: e.target.value}))}
+                            />
                           </div>
 
                           <div>
@@ -744,6 +774,8 @@ export default function CoachingPage() {
                             <Textarea 
                               placeholder="Describe los objetivos específicos..."
                               rows={3}
+                              value={formData.objetivos}
+                              onChange={(e) => setFormData(prev => ({...prev, objetivos: e.target.value}))}
                             />
                           </div>
                         </div>

@@ -90,11 +90,21 @@ model Agencia {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   
+  // Nuevos campos para control de pagos y servicios IA
+  estadoPago           String   @default("ACTIVO") // "ACTIVO", "SUSPENDIDO", "MOROSO"
+  tierServicio         String   @default("BASICO") // "BASICO", "PROFESIONAL", "PREMIUM"
+  fechaUltimoPago      DateTime?
+  limiteGrabacionesMes Int      @default(100)      // Límite mensual de grabaciones
+  grabacionesUsadas    Int      @default(0)       // Contador mensual
+  costosPorGrabacion   Decimal  @default(2.50) @db.Decimal(10, 2) // Costo por grabación
+  saldoPendiente       Decimal  @default(0) @db.Decimal(12, 2)    // Saldo pendiente
+  
   marca         Marca     @relation(fields: [marcaId], references: [id], onDelete: Cascade)
   usuarios      User[]
   prospectos    Prospecto[]
   vehiculos     Vehiculo[]
   metricasVentas MetricaVenta[]
+  facturas      Factura[]
   
   // Nuevas relaciones gerenciales
   workflows     AutomatizacionWorkflow[]
@@ -111,6 +121,10 @@ enum TipoRol {
   GERENTE_GENERAL
   GERENTE_VENTAS
   VENDEDOR
+  COORDINADOR_LEADS
+  CENTRO_LEADS        // Solo recibe llamadas entrantes y visitas - NO SPCC
+  MARKETING_DIGITAL   // Maneja redes, plataformas digitales, página web
+  TELEMARKETING       // Hace llamadas a base de datos de clientes
   DYNAMICFIN_ADMIN
 }
 
@@ -128,6 +142,7 @@ model User {
   activo        Boolean    @default(true)
   emailVerified DateTime?
   image         String?
+  cargaProspectos Int      @default(0)  // Campo para balanceo de carga de prospectos
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   
@@ -139,7 +154,8 @@ model User {
   agencia       Agencia?         @relation(fields: [agenciaId], references: [id])
   marca         Marca?           @relation(fields: [marcaId], references: [id])
   grupo         GrupoAutomotriz? @relation(fields: [grupoId], references: [id])
-  prospectos    Prospecto[]
+  prospectosVendedor    Prospecto[] @relation("ProspectosVendedor")
+  prospectosCoordinador Prospecto[] @relation("ProspectosCoordinador")
   interacciones Interaccion[]
   
   // Nuevas relaciones gerenciales
@@ -155,6 +171,19 @@ model User {
   sesionesCoachingGerente   SesionCoaching[] @relation("CoachingGerente")
   grabaciones               GrabacionConversacion[] @relation("GrabacionesVendedor")
   alertas                   AlertaSistema[] @relation("AlertasUsuario")
+  
+  // Relaciones específicas para Centro de Leads (depreciadas - usar las nuevas)
+  // registrosLlamada          RegistroLlamada[] @relation("LlamadasCoordinador")
+  // visitasShowroom           VisitaShowroom[] @relation("VisitasCoordinador")  
+  asignacionesRealizadas    AsignacionLead[] @relation("AsignacionesCoordinador")
+  asignacionesRecibidas     AsignacionLead[] @relation("AsignacionesVendedor")
+  
+  // Nuevas relaciones para sistema de vendedores de guardia
+  vendedoresGuardia         VendedorGuardia[] @relation("VendedoresGuardia")
+  registrosLlamadasEntrantes RegistroLlamadaEntrante[] @relation("LlamadasEntrantesCoordinador")
+  visitasShowroomRecibidas  VisitaShowroom[] @relation("VisitasShowroomCoordinador")
+  alertasDesbalance         AlertaDesbalance[] @relation("AlertasDesbalanceUsuario")
+  alertasDesbalanceVendedor AlertaDesbalance[] @relation("AlertasDesbalanceVendedor")
   
   @@map("usuarios")
 }
@@ -179,12 +208,13 @@ model Prospecto {
   apellido           String?
   email              String?
   telefono           String?
-  vendedorId         String
+  vendedorId         String?   // Ahora opcional para leads pendientes de asignación
   agenciaId          Int
-  estatus            String    @default("Nuevo")
+  estatus            String    @default("Nuevo") // "Nuevo", "PENDIENTE_CALIFICACION", "Contactado", "Calificado", "Perdido", "Vendido"
   calificacionTotal  Decimal   @default(0.00) @db.Decimal(5, 2)
   clasificacion      String?   // "Elite", "Calificado", "A Madurar", "Explorador"
-  vehiculoInteres    String?
+  vehiculoInteres    String?   // Mantener para compatibilidad - texto libre
+  vehiculoInteresId  Int?      // Nueva referencia al catálogo
   presupuesto        Decimal?  @db.Decimal(12, 2)
   fechaContacto      DateTime  @default(now())
   proximaSeguimiento DateTime?
@@ -192,8 +222,19 @@ model Prospecto {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   
-  vendedor           User           @relation(fields: [vendedorId], references: [id])
+  // Campos específicos para Centro de Leads
+  origenLead         String?   // "LLAMADA_ENTRANTE", "VISITA_SHOWROOM", "OTROS"
+  estadoAsignacion   String    @default("PENDIENTE") // "PENDIENTE", "ASIGNADO", "CONTACTADO"
+  coordinadorId      String?   // ID del coordinador que captó el lead
+  fechaAsignacion    DateTime?
+  nivelUrgencia      String    @default("MEDIA") // "BAJA", "MEDIA", "ALTA"
+  tiempoEsperado     String?   // "INMEDIATO", "1_SEMANA", "1_MES", "FLEXIBLE"
+  acompanantes       String?   // "SOLO", "PAREJA", "FAMILIA", "AMIGOS"
+  
+  vendedor           User?           @relation("ProspectosVendedor", fields: [vendedorId], references: [id])
+  coordinador        User?           @relation("ProspectosCoordinador", fields: [coordinadorId], references: [id])
   agencia            Agencia        @relation(fields: [agenciaId], references: [id])
+  vehiculoCatalogo   VehiculoCatalogo? @relation("VehiculoInteresProspectos", fields: [vehiculoInteresId], references: [id])
   calificaciones     Calificacion[]
   interacciones      Interaccion[]
   
@@ -202,6 +243,15 @@ model Prospecto {
   workflowEjecuciones EjecucionWorkflow[]
   grabaciones        GrabacionConversacion[]
   comisiones         RegistroComision[]
+  
+  // Relaciones específicas para Centro de Leads
+  // registroLlamada    RegistroLlamada?  // Depreciado
+  // visitaShowroom     VisitaShowroom?   // Depreciado
+  
+  // Nuevas relaciones para Centro de Leads
+  llamadasEntrantes  RegistroLlamadaEntrante[] @relation("LlamadaEntrante")
+  visitasShowroomNuevas VisitaShowroom[] @relation("VisitaShowroom")
+  asignacionLead     AsignacionLead? @relation("AsignacionesProspecto")
   
   @@map("prospectos")
 }
@@ -239,7 +289,25 @@ model Interaccion {
   @@map("interacciones")
 }
 
-// Vehicle Management
+// Vehicle Catalog (Simplified vehicle identification without prices)
+model VehiculoCatalogo {
+  id              Int      @id @default(autoincrement())
+  marca           String
+  modelo          String
+  year            Int
+  activo          Boolean  @default(true)
+  fechaCreacion   DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+  
+  // Relaciones con prospectos y visitas
+  prospectos      Prospecto[] @relation("VehiculoInteresProspectos")
+  visitasShowroom VisitaShowroom[] @relation("VisitasVehiculoCatalogo")
+  
+  @@unique([marca, modelo, year])
+  @@map("vehiculos_catalogo")
+}
+
+// Vehicle Management (Existing inventory with prices)
 model Vehiculo {
   id              Int     @id @default(autoincrement())
   agenciaId       Int
@@ -472,21 +540,80 @@ model SesionCoaching {
 
 // Grabaciones de Conversaciones (Para transcripción y análisis)
 model GrabacionConversacion {
-  id              Int      @id @default(autoincrement())
-  prospectoId     Int
-  vendedorId      String
-  tipoLlamada     String   // "prospectacion", "seguimiento", "cierre", "postventa"
-  duracion        Int      // segundos
-  rutaArchivo     String?  // URL del archivo de audio
-  transcripcion   String?  @db.Text
-  analisisIA      String?  @db.Text // JSON con análisis de IA
-  fechaGrabacion  DateTime @default(now())
-  procesado       Boolean  @default(false)
+  id                    Int      @id @default(autoincrement())
+  prospectoId           Int
+  vendedorId            String
+  tipoLlamada           String   // "prospectacion", "seguimiento", "cierre", "postventa", "visita_presencial"
+  duracion              Int      // segundos
+  rutaArchivo           String?  // URL del archivo de audio en Supabase Storage
+  rutaArchivoLocal      String?  // Path temporal antes de upload (por compatibilidad)
+  transcripcion         String?  @db.Text
+  analisisIA            String?  @db.Text // JSON con análisis de IA y pilares SPPC
+  analisisPilaresSPPC   String?  @db.Text // JSON específico para los 15 pilares
+  proveedorIA           String?  // "deepseek", "openai", "anthropic", "qwen"
+  costoTranscripcion    Decimal? @db.Decimal(10, 4) // Costo real del procesamiento
+  costoAnalisis         Decimal? @db.Decimal(10, 4) // Costo real del análisis
+  fechaGrabacion        DateTime @default(now())
+  fechaProcesamiento    DateTime?
+  procesado             Boolean  @default(false)
+  errorProcesamiento    String?  // Mensaje de error si falla el procesamiento
+  calidad               String?  // "EXCELENTE", "BUENA", "REGULAR", "MALA" (basado en duración y claridad)
+  palabrasClave         String?  @db.Text // JSON con palabras clave detectadas
+  sentimientoGeneral    String?  // "positivo", "neutro", "negativo"
+  scoreConversacion     Int?     // Score general de la conversación (1-100)
+  observacionesVendedor String?  @db.Text // Notas manuales del vendedor
   
-  prospecto       Prospecto @relation(fields: [prospectoId], references: [id])
-  vendedor        User      @relation("GrabacionesVendedor", fields: [vendedorId], references: [id])
+  // Metadatos técnicos
+  tamanoArchivo         BigInt?  // Tamaño del archivo en bytes
+  formatoAudio          String?  // "wav", "mp3", "m4a", etc.
+  calidadAudio          String?  // "alta", "media", "baja"
+  dispositivoGrabacion  String?  // "web", "mobile", "desktop"
+  ipOrigen              String?  // IP desde donde se hizo la grabación
   
+  prospecto             Prospecto @relation(fields: [prospectoId], references: [id])
+  vendedor              User      @relation("GrabacionesVendedor", fields: [vendedorId], references: [id])
+  
+  @@index([vendedorId])
+  @@index([prospectoId])
+  @@index([fechaGrabacion])
+  @@index([procesado])
   @@map("grabaciones_conversaciones")
+}
+
+// Facturación por servicios de IA
+model Factura {
+  id                    Int      @id @default(autoincrement())
+  agenciaId             Int
+  numeroFactura         String   @unique
+  mes                   Int
+  year                  Int
+  fechaGeneracion       DateTime @default(now())
+  fechaVencimiento      DateTime
+  fechaPago             DateTime?
+  estatus               String   @default("PENDIENTE") // "PENDIENTE", "PAGADA", "VENCIDA", "CANCELADA"
+  
+  // Desglose de servicios
+  grabacionesRealizadas Int      @default(0)
+  costoPorGrabacion     Decimal  @db.Decimal(10, 2)
+  costoTranscripciones  Decimal  @default(0) @db.Decimal(10, 2)
+  costoAnalisisIA       Decimal  @default(0) @db.Decimal(10, 2)
+  costoAlmacenamiento   Decimal  @default(0) @db.Decimal(10, 2)
+  subtotal              Decimal  @db.Decimal(12, 2)
+  impuestos             Decimal  @db.Decimal(12, 2)
+  total                 Decimal  @db.Decimal(12, 2)
+  
+  // Detalles adicionales
+  detalleServicios      String?  @db.Text // JSON con desglose detallado
+  metodoPago            String?  // "transferencia", "tarjeta", "efectivo"
+  comprobantePago       String?  // URL del comprobante de pago
+  notas                 String?  @db.Text
+  
+  agencia               Agencia  @relation(fields: [agenciaId], references: [id])
+  
+  @@unique([agenciaId, mes, year])
+  @@index([estatus])
+  @@index([fechaVencimiento])
+  @@map("facturas")
 }
 
 // Reportes Gerenciales Pre-configurados
@@ -525,6 +652,141 @@ model AlertaSistema {
   usuario      User     @relation("AlertasUsuario", fields: [usuarioId], references: [id])
   
   @@map("alertas_sistema")
+}
+
+// ================== CENTRO DE LEADS - VENDEDORES DE GUARDIA ==================
+
+// Sistema de vendedores de guardia diario
+model VendedorGuardia {
+  id            Int      @id @default(autoincrement())
+  vendedorId    String
+  fecha         DateTime @default(now()) @db.Date // Fecha específica de guardia
+  activo        Boolean  @default(true)
+  horaInicio    String?  @default("09:00")  // Hora de inicio de guardia
+  horaFin       String?  @default("18:00")  // Hora de fin de guardia
+  cargaActual   Int      @default(0)       // Carga actual de prospectos asignados
+  metaDelDia    Int      @default(5)       // Meta de leads que puede atender
+  observaciones String?  // Notas del gerente sobre esta guardia
+  creadoPor     String?  // ID del gerente que definió la guardia
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  vendedor      User     @relation("VendedoresGuardia", fields: [vendedorId], references: [id])
+  
+  @@unique([vendedorId, fecha]) // Un vendedor solo puede tener una guardia por día
+  @@index([fecha, activo])
+  @@map("vendedores_guardia")
+}
+
+// Registro detallado de llamadas entrantes
+model RegistroLlamadaEntrante {
+  id                  Int      @id @default(autoincrement())
+  coordinadorId       String   // ID del coordinador de centro de leads que atendió
+  numeroTelefono      String?  // Número desde donde llamaron
+  duracionLlamada     Int?     // Duración en segundos
+  horaLlamada         DateTime @default(now())
+  tipoConsulta        String?  // "informacion", "cotizacion", "cita", "seguimiento"
+  calificacionLlamada String?  // "caliente", "tibio", "frio"
+  observaciones       String?  @db.Text
+  resultadoContacto   String?  // "lead_generado", "informacion_dada", "no_interesado"
+  siguienteAccion     String?  // "asignar_vendedor", "llamar_despues", "enviar_info"
+  prospectoGeneradoId Int?     // ID del prospecto si se generó uno
+  grabacionUrl        String?  // URL de grabación de la llamada si aplica
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  coordinador         User     @relation("LlamadasEntrantesCoordinador", fields: [coordinadorId], references: [id])
+  prospectoGenerado   Prospecto? @relation("LlamadaEntrante", fields: [prospectoGeneradoId], references: [id])
+  
+  @@index([horaLlamada])
+  @@index([coordinadorId])
+  @@map("registros_llamadas_entrantes")
+}
+
+// Registro detallado de visitas al showroom
+model VisitaShowroom {
+  id                  Int      @id @default(autoincrement())
+  coordinadorId       String   // ID del coordinador que atendió la visita
+  nombreVisitante     String
+  acompanantes        Int      @default(1)  // Número total de personas
+  tipoVisita          String?  // "informacion", "test_drive", "cotizacion", "entrega"
+  vehiculoInteres     String?  // Vehículo específico de interés
+  vehiculoInteresId   Int?     // Referencia al catálogo de vehículos
+  tiempoVisita        Int?     // Duración en minutos
+  horaIngreso         DateTime @default(now())
+  horaSalida          DateTime?
+  nivelInteres        String?  // "alto", "medio", "bajo"
+  presupuestoMencionado Decimal? @db.Decimal(12, 2)
+  formaPagoPreferida  String?  // "contado", "credito", "arrendamiento"
+  observaciones       String?  @db.Text
+  resultadoVisita     String?  // "lead_generado", "solo_informacion", "test_drive_realizado"
+  prospectoGeneradoId Int?     // ID del prospecto si se generó uno
+  seguimientoRequerido Boolean @default(false)
+  fechaSeguimiento    DateTime?
+  fotosVehiculo       String?  // JSON con URLs de fotos tomadas
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  coordinador         User     @relation("VisitasShowroomCoordinador", fields: [coordinadorId], references: [id])
+  vehiculoCatalogo    VehiculoCatalogo? @relation("VisitasVehiculoCatalogo", fields: [vehiculoInteresId], references: [id])
+  prospectoGenerado   Prospecto? @relation("VisitaShowroom", fields: [prospectoGeneradoId], references: [id])
+  
+  @@index([horaIngreso])
+  @@index([coordinadorId])
+  @@map("visitas_showroom")
+}
+
+// Sistema de asignación de leads con balanceado de carga
+model AsignacionLead {
+  id                    Int      @id @default(autoincrement())
+  prospectoId           Int
+  coordinadorId         String   // Quien hizo la asignación
+  vendedorAsignadoId    String   // A quién se asignó
+  fechaAsignacion       DateTime @default(now())
+  metodologiaAsignacion String   @default("BALANCEADO") // "BALANCEADO", "MANUAL", "URGENTE"
+  cargaCoordinadorMomento Int    @default(0)  // Carga que tenía el coordinador al momento
+  cargaVendedorMomento   Int     @default(0)  // Carga que tenía el vendedor al momento
+  motivoAsignacion      String?  // "guardia_disponible", "especialidad", "urgente", "desbalance_forzado"
+  prioridadAsignacion   String   @default("NORMAL") // "BAJA", "NORMAL", "ALTA", "URGENTE"
+  notificacionEnviada   Boolean  @default(false)
+  fechaNotificacion     DateTime?
+  vendedorContacto      Boolean  @default(false) // Si el vendedor ya contactó al prospecto
+  fechaPrimerContacto   DateTime?
+  resultadoPrimerContacto String? // "contactado", "no_responde", "reagendar", "no_interesado"
+  observaciones         String?  @db.Text
+  
+  prospecto             Prospecto @relation("AsignacionesProspecto", fields: [prospectoId], references: [id])
+  coordinador           User     @relation("AsignacionesCoordinador", fields: [coordinadorId], references: [id])
+  vendedorAsignado      User     @relation("AsignacionesVendedor", fields: [vendedorAsignadoId], references: [id])
+  
+  @@unique([prospectoId]) // Un prospecto solo puede tener una asignación activa
+  @@index([fechaAsignacion])
+  @@index([vendedorAsignadoId])
+  @@map("asignaciones_leads")
+}
+
+// Alertas de desbalance de carga entre vendedores
+model AlertaDesbalance {
+  id                  Int      @id @default(autoincrement())
+  usuarioId           String   // Gerente o coordinador que debe ver la alerta
+  tipoDesbalance      String   // "CARGA_ALTA", "CARGA_DESIGUAL", "VENDEDOR_SOBRECARGADO"
+  vendedorAfectadoId  String?  // Vendedor con sobrecarga
+  diferenciaDetectada Int      @default(0)  // Diferencia en número de leads
+  umbralConfigurado   Int      @default(3)  // Umbral configurado para alertar
+  sugerenciaAccion    String?  // "redistribuir", "agregar_vendedor_guardia", "pausar_asignaciones"
+  fechaDeteccion      DateTime @default(now())
+  estadoAlerta        String   @default("ACTIVA") // "ACTIVA", "EN_PROCESO", "RESUELTA", "IGNORADA"
+  accionTomada        String?  // Acción que se tomó para resolver
+  fechaResolucion     DateTime?
+  observaciones       String?  @db.Text
+  datosDesbalance     String?  @db.Text // JSON con datos detallados del desbalance
+  
+  usuario             User     @relation("AlertasDesbalanceUsuario", fields: [usuarioId], references: [id])
+  vendedorAfectado    User?    @relation("AlertasDesbalanceVendedor", fields: [vendedorAfectadoId], references: [id])
+  
+  @@index([fechaDeteccion, estadoAlerta])
+  @@index([usuarioId])
+  @@map("alertas_desbalance")
 }
 
 // Configuration and Settings

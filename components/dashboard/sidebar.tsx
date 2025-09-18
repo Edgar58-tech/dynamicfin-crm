@@ -27,7 +27,12 @@ import {
   GraduationCap,
   Eye,
   Activity,
-  Zap
+  Zap,
+  Phone,
+  Store,
+  UserPlus,
+  AlertCircle,
+  LineChart
 } from 'lucide-react';
 import { TipoRol } from '@prisma/client';
 
@@ -57,12 +62,45 @@ export function Sidebar() {
       icon: BarChart3,
       roles: ['ALL'],
     },
+    
+    // SECCIÓN GERENCIAL - Nueva entrada destacada
+    ...(session?.user?.rol === 'GERENTE_VENTAS' ? [
+      {
+        title: '📊 Dashboard Gerencial',
+        href: '/dashboard/gerencial',
+        icon: LineChart,
+        roles: ['GERENTE_VENTAS'],
+        featured: true, // Marcamos como destacado
+      },
+    ] : []),
+    
+    {
+      title: '⏱️ Pendientes de Calificación',
+      href: '/dashboard/pendientes-calificacion',
+      icon: AlertCircle,
+      roles: ['VENDEDOR', 'GERENTE_VENTAS', 'GERENTE_GENERAL'],
+    },
     {
       title: 'Prospectos SPPC',
       href: '/dashboard/prospectos',
       icon: Users,
-      roles: ['ALL'],
+      roles: ['VENDEDOR', 'COORDINADOR_LEADS', 'GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_MARCA', 'DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'], // CENTRO_LEADS NO tiene acceso SPCC
     },
+    
+    // SECCIÓN CENTRO DE LEADS
+    {
+      title: '📞 Centro de Leads',
+      href: '/dashboard/centro-leads',
+      icon: Phone,
+      roles: ['CENTRO_LEADS', 'COORDINADOR_LEADS', 'GERENTE_VENTAS', 'GERENTE_GENERAL'],
+    },
+    {
+      title: '👥 Vendedores Guardia',
+      href: '/dashboard/vendedores-guardia',
+      icon: UserPlus,
+      roles: ['GERENTE_VENTAS', 'GERENTE_GENERAL'],
+    },
+    
     {
       title: 'Calendario',
       href: '/dashboard/calendario',
@@ -76,14 +114,8 @@ export function Sidebar() {
       roles: ['ALL'],
     },
     
-    // SECCIÓN GERENCIAL - Solo para gerentes
+    // SECCIÓN GERENCIAL - Resto de herramientas
     ...(session?.user?.rol === 'GERENTE_VENTAS' ? [
-      {
-        title: '👔 Dashboard Gerencial',
-        href: '/dashboard/gerente',
-        icon: UserCog,
-        roles: ['GERENTE_VENTAS'],
-      },
       {
         title: '🔄 Reasignación Leads',
         href: '/dashboard/gerente/reasignacion',
@@ -100,6 +132,12 @@ export function Sidebar() {
         title: '🔮 Forecasting',
         href: '/dashboard/gerente/forecasting',
         icon: Eye,
+        roles: ['GERENTE_VENTAS'],
+      },
+      {
+        title: '⏱️ Monitoreo Pendientes',
+        href: '/dashboard/gerente/pendientes-monitoreo',
+        icon: AlertCircle,
         roles: ['GERENTE_VENTAS'],
       },
       {
@@ -127,6 +165,12 @@ export function Sidebar() {
       href: '/dashboard/inventario',
       icon: Car,
       roles: ['ALL'],
+    },
+    {
+      title: 'Catálogo Vehículos',
+      href: '/dashboard/admin/catalogo-vehiculos',
+      icon: Database,
+      roles: ['GERENTE_GENERAL', 'GERENTE_VENTAS', 'DYNAMICFIN_ADMIN'],
     },
     {
       title: 'Finanzas',
@@ -216,6 +260,7 @@ export function Sidebar() {
             
             const isActive = pathname === item.href;
             const Icon = item.icon;
+            const isFeatured = (item as any).featured;
             
             return (
               <li key={item.href}>
@@ -225,11 +270,20 @@ export function Sidebar() {
                     'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
                     isActive 
                       ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800',
+                    isFeatured && !isActive && 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100'
                   )}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className={cn(
+                    "w-4 h-4",
+                    isFeatured && !isActive && "text-blue-600"
+                  )} />
                   {item.title}
+                  {isFeatured && !isActive && (
+                    <span className="ml-auto">
+                      <span className="inline-block w-2 h-2 bg-blue-600 rounded-full"></span>
+                    </span>
+                  )}
                 </Link>
               </li>
             );

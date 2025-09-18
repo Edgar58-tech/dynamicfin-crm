@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Image from 'next/image';
-import { Loader2, Shield, User } from 'lucide-react';
+import { Loader2, Shield, User, HeadphonesIcon } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 import { toast } from 'sonner';
 
@@ -18,12 +18,13 @@ export function SimpleLogin() {
   const [password, setPassword] = useState('');
   const router = useRouter();
 
-  const quickLogin = async (role: 'gerente' | 'vendedor') => {
+  const quickLogin = async (role: 'gerente' | 'vendedor' | 'centro-leads') => {
     setIsLoading(true);
     
     const credentials = {
-      gerente: { email: 'gerente@demo.com', password: 'demo123' },
-      vendedor: { email: 'vendedor@demo.com', password: 'demo123' }
+      gerente: { email: 'gerenteaudi@demo.com', password: 'gerente1213' },
+      vendedor: { email: 'vendedoraudi@demo.com', password: 'vendedor123' },
+      'centro-leads': { email: 'recepaudi@demo.com', password: 'recep123' }
     };
 
     try {
@@ -36,7 +37,10 @@ export function SimpleLogin() {
       if (result?.error) {
         toast.error('Error al iniciar sesión');
       } else {
-        toast.success(`¡Bienvenido ${role === 'gerente' ? 'Gerente' : 'Vendedor'}!`);
+        const welcomeText = role === 'gerente' ? 'Gerente de Ventas' : 
+                           role === 'vendedor' ? 'Vendedor' : 
+                           'Coordinador Centro de Leads';
+        toast.success(`¡Bienvenido ${welcomeText}!`);
         router.push('/dashboard');
         router.refresh();
       }
@@ -108,27 +112,38 @@ export function SimpleLogin() {
               🚀 Acceso Rápido Demo
             </h3>
             
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <Button
                 onClick={() => quickLogin('gerente')}
                 disabled={isLoading}
                 variant="outline"
-                className="flex flex-col h-auto py-4 px-3"
+                className="flex flex-col h-auto py-3 px-2"
               >
-                <Shield className="w-6 h-6 mb-2 text-blue-600" />
+                <Shield className="w-5 h-5 mb-1 text-blue-600" />
                 <span className="text-xs font-medium">Gerente</span>
-                <span className="text-xs text-slate-500">Acceso Total</span>
+                <span className="text-xs text-slate-500">Demo</span>
               </Button>
               
               <Button
                 onClick={() => quickLogin('vendedor')}
                 disabled={isLoading}
                 variant="outline"
-                className="flex flex-col h-auto py-4 px-3"
+                className="flex flex-col h-auto py-3 px-2"
               >
-                <User className="w-6 h-6 mb-2 text-green-600" />
+                <User className="w-5 h-5 mb-1 text-green-600" />
                 <span className="text-xs font-medium">Vendedor</span>
-                <span className="text-xs text-slate-500">Prospectos</span>
+                <span className="text-xs text-slate-500">Demo</span>
+              </Button>
+
+              <Button
+                onClick={() => quickLogin('centro-leads')}
+                disabled={isLoading}
+                variant="outline"
+                className="flex flex-col h-auto py-3 px-2"
+              >
+                <HeadphonesIcon className="w-5 h-5 mb-1 text-purple-600" />
+                <span className="text-xs font-medium">Centro Leads</span>
+                <span className="text-xs text-slate-500">Demo</span>
               </Button>
             </div>
           </div>
@@ -191,9 +206,10 @@ export function SimpleLogin() {
           {/* Información de Credenciales */}
           <div className="bg-blue-50 rounded-lg p-4 text-sm">
             <h4 className="font-semibold text-blue-800 mb-2">💡 Credenciales Demo:</h4>
-            <div className="space-y-1 text-blue-700">
-              <div>👔 <strong>Gerente:</strong> gerente@demo.com / demo123</div>
-              <div>👤 <strong>Vendedor:</strong> vendedor@demo.com / demo123</div>
+            <div className="space-y-1 text-blue-700 text-xs">
+              <div>👔 <strong>Gerente:</strong> gerenteaudi@demo.com / gerente1213</div>
+              <div>👤 <strong>Vendedor:</strong> vendedoraudi@demo.com / vendedor123</div>
+              <div>🎧 <strong>Centro de Leads:</strong> recepaudi@demo.com / recep123</div>
             </div>
           </div>
         </CardContent>

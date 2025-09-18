@@ -2,13 +2,14 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Mic, 
   Square, 
@@ -22,10 +23,16 @@ import {
   AlertTriangle,
   TrendingUp,
   Users,
-  Volume2
+  Volume2,
+  Upload,
+  Loader2,
+  X,
+  FileAudio,
+  Sparkles
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { AudioRecorder, checkAudioSupport, getOptimalSettings, formatDuration, formatFileSize } from '@/lib/audio-utils';
 
 interface GrabacionConversacionProps {
   prospectoId: number;
@@ -34,15 +41,18 @@ interface GrabacionConversacionProps {
   onGrabacionGuardada?: () => void;
 }
 
-interface AnalisisIA {
-  sentiment: 'positivo' | 'neutro' | 'negativo';
-  palabrasClave: string[];
-  momentosImportantes: { tiempo: number; descripcion: string }[];
-  objecionesDetectadas: string[];
+interface AnalisisSPPC {
+  analisisPilares: { [key: string]: { puntuacion: number; justificacion: string; evidencia: string } };
+  resumenGeneral: {
+    puntuacionTotal: number;
+    clasificacion: string;
+    sentimiento: string;
+    palabrasClave: string[];
+    momentosImportantes: { minuto: number; descripcion: string }[];
+  };
+  objeciones: { tipo: string; descripcion: string; severidad: string }[];
   recomendaciones: string[];
-  scoreGeneralLlamada: number;
-  duracionOptima: boolean;
-  tonoDeLlamada: string;
+  proximosPasos: string[];
 }
 
 export default function GrabacionConversacion({ 
@@ -51,205 +61,298 @@ export default function GrabacionConversacion({
   prospectoNombre,
   onGrabacionGuardada 
 }: GrabacionConversacionProps) {
+  const { data: session } = useSession();
+  const [audioRecorder, setAudioRecorder] = useState<AudioRecorder | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [recordedAudio, setRecordedAudio] = useState<{ blob: Blob; metadata: any } | null>(null);
+  
+  // Estados del proceso
+  const [isUploading, setIsUploading] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [currentStep, setCurrentStep] = useState<'recording' | 'upload' | 'transcribe' | 'analyze' | 'complete'>('recording');
+  
+  // Datos de grabación
+  const [grabacionId, setGrabacionId] = useState<number | null>(null);
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const [transcripcion, setTranscripcion] = useState('');
-  const [analisisIA, setAnalisisIA] = useState<AnalisisIA | null>(null);
+  const [analisisSPPC, setAnalisisSPPC] = useState<AnalisisSPPC | null>(null);
+  
+  // Configuración
   const [tipoLlamada, setTipoLlamada] = useState('prospectacion');
-  const [notas, setNotas] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [observaciones, setObservaciones] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState<any>(null);
+  const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const mediaRecorder = useRef<MediaRecorder | null>(null);
-  const audioChunks = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Verificar soporte de audio al montar
   useEffect(() => {
+    const audioSupport = checkAudioSupport();
+    if (!audioSupport.supported) {
+      setError(`Tu navegador no soporta grabación de audio: ${audioSupport.errors.join(', ')}`);
+    }
+
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      // Cleanup audio recorder
+      if (audioRecorder) {
+        audioRecorder.cancelRecording();
+      }
     };
-  }, []);
+  }, [audioRecorder]);
+
+  const initializeRecorder = async () => {
+    try {
+      const settings = getOptimalSettings();
+      const recorder = new AudioRecorder(settings);
+      setAudioRecorder(recorder);
+      return recorder;
+    } catch (error) {
+      console.error('Error initializing recorder:', error);
+      toast.error('Error inicializando grabadora');
+      return null;
+    }
+  };
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder.current = new MediaRecorder(stream);
-      audioChunks.current = [];
+      setError(null);
+      
+      let recorder = audioRecorder;
+      if (!recorder) {
+        recorder = await initializeRecorder();
+        if (!recorder) return;
+      }
 
-      mediaRecorder.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunks.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.current.onstop = () => {
-        const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
-        setAudioBlob(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorder.current.start();
+      await recorder.startRecording();
       setIsRecording(true);
       setRecordingTime(0);
+      setCurrentStep('recording');
 
       // Iniciar contador de tiempo
       intervalRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
 
-      toast.success('Grabación iniciada');
+      toast.success('🎙️ Grabación iniciada');
     } catch (error) {
       console.error('Error al iniciar grabación:', error);
+      setError(`Error al iniciar grabación: ${error instanceof Error ? error.message : 'Error desconocido'}`);
       toast.error('Error al acceder al micrófono');
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorder.current && isRecording) {
-      mediaRecorder.current.stop();
+  const stopRecording = async () => {
+    try {
+      if (!audioRecorder || !isRecording) return;
+
+      const result = await audioRecorder.stopRecording();
       setIsRecording(false);
       setIsPaused(false);
+      setRecordedAudio(result);
       
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
 
-      toast.success('Grabación finalizada');
+      toast.success(`🎵 Grabación completada: ${formatDuration(result.metadata.duration)}`);
+      setCurrentStep('upload');
+    } catch (error) {
+      console.error('Error al detener grabación:', error);
+      setError(`Error al detener grabación: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      toast.error('Error al finalizar grabación');
     }
   };
 
   const pauseRecording = () => {
-    if (mediaRecorder.current && isRecording) {
-      if (isPaused) {
-        mediaRecorder.current.resume();
-        intervalRef.current = setInterval(() => {
-          setRecordingTime(prev => prev + 1);
-        }, 1000);
-      } else {
-        mediaRecorder.current.pause();
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
+    if (!audioRecorder || !isRecording) return;
+
+    if (isPaused) {
+      audioRecorder.resumeRecording();
+      intervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      toast.success('⏯️ Grabación reanudada');
+    } else {
+      audioRecorder.pauseRecording();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
       }
-      setIsPaused(!isPaused);
+      toast.success('⏸️ Grabación pausada');
     }
+    setIsPaused(!isPaused);
   };
 
-  const procesarConIA = async () => {
-    if (!audioBlob) return;
+  const uploadAudio = async () => {
+    if (!recordedAudio || !session?.user) return;
 
-    setIsProcessing(true);
-    try {
-      // Simular procesamiento de IA (en producción sería una llamada a API)
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Simular transcripción
-      const mockTranscripcion = `
-Vendedor: Buenos días ${prospectoNombre}, habla Juan de la agencia Honda. ¿Cómo está usted?
-
-Cliente: Hola, bien gracias. Me dijeron que me iban a llamar por el SUV que vi en internet.
-
-Vendedor: Perfecto, sí, exactamente. Vi que consultó sobre nuestro CR-V 2025. Es una excelente opción para familias. ¿Me podría platicar un poco sobre qué está buscando específicamente?
-
-Cliente: Bueno, necesitamos algo espacioso para la familia, que sea confiable y no muy caro de mantener. Tenemos dos hijos pequeños.
-
-Vendedor: Entiendo perfectamente. El CR-V es ideal para eso. ¿Cuál sería su presupuesto aproximado para esta compra?
-
-Cliente: Pues... estábamos pensando entre 450 y 500 mil pesos. ¿Cree que alcance?
-
-Vendedor: Sí, perfecto. Con ese presupuesto tenemos varias opciones excelentes. ¿Le interesaría agendar una cita para que venga a conocer el vehículo y le pueda mostrar todas las características?
-
-Cliente: Me interesa, pero primero quisiera saber si manejan financiamiento.
-
-Vendedor: ¡Por supuesto! Manejamos financiamiento con las mejores tasas del mercado. ¿Qué le parece si agenda su cita para mañana por la tarde y le preparo toda la información financiera?
-
-Cliente: Perfecto, ¿a qué hora estaría bien?
-
-Vendedor: ¿Le conviene a las 4 de la tarde?
-
-Cliente: Excelente, ahí estaremos.
-      `;
-
-      // Simular análisis de IA
-      const mockAnalisis: AnalisisIA = {
-        sentiment: 'positivo',
-        palabrasClave: ['SUV', 'familia', 'financiamiento', 'presupuesto', 'cita'],
-        momentosImportantes: [
-          { tiempo: 45, descripcion: 'Cliente reveló necesidad específica (espacio familiar)' },
-          { tiempo: 78, descripcion: 'Cliente mencionó presupuesto (450-500k)' },
-          { tiempo: 120, descripcion: 'Cliente mostró interés en financiamiento' },
-          { tiempo: 145, descripcion: 'Cita agendada exitosamente' }
-        ],
-        objecionesDetectadas: [
-          'Preocupación por costos de mantenimiento',
-          'Necesidad de confirmar financiamiento antes de decidir'
-        ],
-        recomendaciones: [
-          'Preparar información detallada de costos de mantenimiento para la cita',
-          'Tener lista simulación de crédito con diferentes plazos',
-          'Mostrar características de seguridad para niños',
-          'Preparar comparativo con modelos similares de la competencia'
-        ],
-        scoreGeneralLlamada: 87,
-        duracionOptima: true,
-        tonoDeLlamada: 'Profesional y empático'
-      };
-
-      setTranscripcion(mockTranscripcion);
-      setAnalisisIA(mockAnalisis);
-      toast.success('Análisis completado con IA');
-      
-    } catch (error) {
-      console.error('Error al procesar con IA:', error);
-      toast.error('Error en el análisis de IA');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const guardarGrabacion = async () => {
-    if (!audioBlob) return;
+    setIsUploading(true);
+    setError(null);
 
     try {
-      // Aquí se guardaría en la base de datos
+      // Crear FormData para el upload
       const formData = new FormData();
-      formData.append('audio', audioBlob, `grabacion_${prospectoId}_${Date.now()}.wav`);
+      formData.append('audio', recordedAudio.blob, `grabacion_${prospectoId}_${Date.now()}.webm`);
       formData.append('prospectoId', prospectoId.toString());
-      formData.append('vendedorId', vendedorId);
       formData.append('tipoLlamada', tipoLlamada);
-      formData.append('duracion', recordingTime.toString());
-      formData.append('transcripcion', transcripcion);
-      formData.append('analisisIA', JSON.stringify(analisisIA));
-      formData.append('notas', notas);
+      formData.append('duracion', recordedAudio.metadata.duration.toString());
 
-      // const response = await fetch('/api/grabaciones', {
-      //   method: 'POST',
-      //   body: formData
-      // });
+      // Subir archivo
+      const uploadResponse = await fetch('/api/grabaciones/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-      // if (response.ok) {
-        toast.success('Grabación guardada exitosamente');
-        if (onGrabacionGuardada) onGrabacionGuardada();
-        resetRecording();
-      // }
+      const uploadResult = await uploadResponse.json();
+
+      if (!uploadResponse.ok) {
+        throw new Error(uploadResult.error || 'Error al subir archivo');
+      }
+
+      if (uploadResult.paymentStatus) {
+        setPaymentStatus(uploadResult.paymentStatus);
+      }
+
+      setUploadedUrl(uploadResult.url);
       
+      // Crear registro de grabación en base de datos
+      const createResponse = await fetch('/api/grabaciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prospectoId,
+          tipoLlamada,
+          duracion: recordedAudio.metadata.duration,
+          rutaArchivo: uploadResult.path,
+          observacionesVendedor: observaciones,
+          tamanoArchivo: recordedAudio.metadata.size,
+          formatoAudio: recordedAudio.metadata.format,
+          dispositivoGrabacion: 'web',
+        }),
+      });
+
+      const createResult = await createResponse.json();
+
+      if (!createResponse.ok) {
+        throw new Error(createResult.error || 'Error al crear grabación');
+      }
+
+      setGrabacionId(createResult.grabacion.id);
+      toast.success('📁 Archivo subido exitosamente');
+      setCurrentStep('transcribe');
+
     } catch (error) {
-      console.error('Error al guardar grabación:', error);
-      toast.error('Error al guardar la grabación');
+      console.error('Error uploading audio:', error);
+      setError(`Error al subir audio: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      toast.error('Error al subir grabación');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const transcribeAudio = async () => {
+    if (!grabacionId) return;
+
+    setIsTranscribing(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/grabaciones/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grabacionId,
+          language: 'es',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error en transcripción');
+      }
+
+      setTranscripcion(result.transcripcion);
+      toast.success('📝 Transcripción completada');
+      setCurrentStep('analyze');
+
+    } catch (error) {
+      console.error('Error transcribing audio:', error);
+      setError(`Error en transcripción: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      toast.error('Error en transcripción');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const analyzeWithSPPC = async () => {
+    if (!grabacionId) return;
+
+    setIsAnalyzing(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/grabaciones/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grabacionId,
+          forceReanalysis: false,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error en análisis SPPC');
+      }
+
+      setAnalisisSPPC(result.analisis);
+      toast.success('🧠 Análisis SPPC completado');
+      setCurrentStep('complete');
+
+    } catch (error) {
+      console.error('Error analyzing with SPPC:', error);
+      setError(`Error en análisis SPPC: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      toast.error('Error en análisis SPPC');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
   const resetRecording = () => {
-    setAudioBlob(null);
+    // Limpiar estado
+    setRecordedAudio(null);
     setTranscripcion('');
-    setAnalisisIA(null);
+    setAnalisisSPPC(null);
+    setGrabacionId(null);
+    setUploadedUrl(null);
     setRecordingTime(0);
-    setNotas('');
-    setShowAnalysis(false);
+    setObservaciones('');
+    setCurrentStep('recording');
+    setError(null);
+    setShowAnalysisDetails(false);
+    
+    // Limpiar grabadora
+    if (audioRecorder) {
+      audioRecorder.cancelRecording();
+    }
+    
+    toast.success('Listo para nueva grabación');
+  };
+
+  const handleGuardarYFinalizar = () => {
+    toast.success('✅ Grabación procesada y guardada exitosamente');
+    if (onGrabacionGuardada) {
+      onGrabacionGuardada();
+    }
+    resetRecording();
   };
 
   const formatTime = (seconds: number) => {
@@ -260,302 +363,496 @@ Cliente: Excelente, ahí estaremos.
 
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
-      case 'positivo': return 'text-green-600';
-      case 'negativo': return 'text-red-600';
-      default: return 'text-yellow-600';
+      case 'positivo': return 'text-green-600 bg-green-50 border-green-200';
+      case 'negativo': return 'text-red-600 bg-red-50 border-red-200';
+      default: return 'text-yellow-600 bg-yellow-50 border-yellow-200';
     }
   };
 
-  const getSentimentBg = (sentiment: string) => {
+  const getSentimentEmoji = (sentiment: string) => {
     switch (sentiment) {
-      case 'positivo': return 'bg-green-100 text-green-800';
-      case 'negativo': return 'bg-red-100 text-red-800';
-      default: return 'bg-yellow-100 text-yellow-800';
+      case 'positivo': return '😊';
+      case 'negativo': return '😞';
+      default: return '😐';
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Control de Grabación */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mic className="w-5 h-5" />
-            Grabación de Conversación - {prospectoNombre}
+    <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Error Alert */}
+      {error && (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertTriangle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
+            {error}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-2 h-6 px-2 text-red-600 hover:text-red-700"
+              onClick={() => setError(null)}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Payment Status Warning */}
+      {paymentStatus && !paymentStatus.canUseService && (
+        <Alert className="border-orange-200 bg-orange-50">
+          <AlertTriangle className="h-4 w-4 text-orange-600" />
+          <AlertDescription className="text-orange-800">
+            <strong>Límite de servicios:</strong> {paymentStatus.reason}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {paymentStatus && paymentStatus.canUseService && paymentStatus.reason && (
+        <Alert className="border-blue-200 bg-blue-50">
+          <AlertTriangle className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-blue-800">
+            {paymentStatus.reason}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Main Recording Card */}
+      <Card className="overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 border-b">
+          <CardTitle className="flex items-center gap-3">
+            <div className="p-2 bg-white rounded-lg shadow-sm">
+              <Mic className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                Sistema de Grabación Inteligente
+              </h2>
+              <p className="text-sm font-medium text-blue-600">
+                {prospectoNombre}
+              </p>
+            </div>
           </CardTitle>
-          <CardDescription>
-            Graba, transcribe y analiza conversaciones con IA para mejorar tu técnica de ventas
+          <CardDescription className="text-gray-600">
+            Graba, transcribe y analiza conversaciones con IA para mejorar tu estrategia SPPC
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center space-x-4 mb-6">
-            {!isRecording && !audioBlob && (
-              <Button 
-                onClick={startRecording}
-                className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 text-lg"
-              >
-                <Mic className="w-6 h-6 mr-2" />
-                Iniciar Grabación
-              </Button>
-            )}
-
-            {isRecording && (
-              <>
-                <Button 
-                  onClick={pauseRecording}
-                  variant="outline"
-                  className="px-6 py-4"
-                >
-                  {isPaused ? <Play className="w-5 h-5 mr-2" /> : <Pause className="w-5 h-5 mr-2" />}
-                  {isPaused ? 'Reanudar' : 'Pausar'}
-                </Button>
-
-                <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full ${isRecording && !isPaused ? 'bg-red-500 animate-pulse' : 'bg-gray-400'}`}></div>
-                  <span className="text-2xl font-mono font-bold">
-                    {formatTime(recordingTime)}
-                  </span>
+        <CardContent className="p-6">
+          {/* Progress Stepper */}
+          <div className="flex items-center justify-between mb-8">
+            {['recording', 'upload', 'transcribe', 'analyze', 'complete'].map((step, index) => {
+              const isActive = currentStep === step;
+              const isCompleted = ['recording', 'upload', 'transcribe', 'analyze', 'complete'].indexOf(currentStep) > index;
+              
+              return (
+                <div key={step} className="flex items-center">
+                  <div className={`
+                    w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all
+                    ${isActive ? 'bg-blue-600 text-white ring-4 ring-blue-100' : 
+                      isCompleted ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}
+                  `}>
+                    {isCompleted ? <CheckCircle className="w-5 h-5" /> : index + 1}
+                  </div>
+                  {index < 4 && (
+                    <div className={`h-1 w-16 mx-2 transition-all ${
+                      isCompleted ? 'bg-green-600' : 'bg-gray-200'
+                    }`} />
+                  )}
                 </div>
-
-                <Button 
-                  onClick={stopRecording}
-                  className="bg-gray-800 hover:bg-gray-900 px-6 py-4"
-                >
-                  <Square className="w-5 h-5 mr-2" />
-                  Finalizar
-                </Button>
-              </>
-            )}
-
-            {audioBlob && (
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <span className="font-medium">Grabación completa: {formatTime(recordingTime)}</span>
-                </div>
-                <audio controls src={URL.createObjectURL(audioBlob)} className="h-10" />
-              </div>
-            )}
+              );
+            })}
           </div>
 
-          {audioBlob && !transcripcion && (
-            <div className="text-center">
-              <Button 
-                onClick={procesarConIA}
-                disabled={isProcessing}
-                className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="w-5 h-5 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Procesando con IA...
-                  </>
-                ) : (
-                  <>
-                    <Brain className="w-5 h-5 mr-2" />
-                    Analizar con IA
-                  </>
+          {/* Recording Controls */}
+          {currentStep === 'recording' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center space-y-6"
+            >
+              <div className="flex items-center justify-center space-x-4">
+                {!isRecording && !recordedAudio && (
+                  <Button 
+                    onClick={startRecording}
+                    size="lg"
+                    className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 text-lg shadow-lg"
+                  >
+                    <Mic className="w-6 h-6 mr-2" />
+                    Iniciar Grabación
+                  </Button>
                 )}
-              </Button>
-            </div>
-          )}
 
-          {transcripcion && (
-            <div className="space-y-6">
-              {/* Configuración de la llamada */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="tipoLlamada">Tipo de Llamada</Label>
-                  <Select value={tipoLlamada} onValueChange={setTipoLlamada}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="prospectacion">Prospección</SelectItem>
-                      <SelectItem value="seguimiento">Seguimiento</SelectItem>
-                      <SelectItem value="cierre">Cierre de Venta</SelectItem>
-                      <SelectItem value="postventa">Post-venta</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="notas">Notas Adicionales</Label>
-                  <Textarea
-                    id="notas"
-                    value={notas}
-                    onChange={(e) => setNotas(e.target.value)}
-                    placeholder="Observaciones importantes..."
-                    rows={3}
-                  />
-                </div>
-              </div>
+                {isRecording && (
+                  <div className="flex items-center space-x-4">
+                    <Button 
+                      onClick={pauseRecording}
+                      variant="outline"
+                      size="lg"
+                      className="px-6 py-4"
+                    >
+                      {isPaused ? (
+                        <>
+                          <Play className="w-5 h-5 mr-2" />
+                          Reanudar
+                        </>
+                      ) : (
+                        <>
+                          <Pause className="w-5 h-5 mr-2" />
+                          Pausar
+                        </>
+                      )}
+                    </Button>
 
-              {/* Análisis de IA */}
-              {analisisIA && (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="flex items-center gap-2">
-                        <Brain className="w-5 h-5 text-purple-600" />
-                        Análisis Inteligente de la Conversación
-                      </CardTitle>
-                      <Badge className="bg-purple-100 text-purple-800">
-                        Score: {analisisIA.scoreGeneralLlamada}/100
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Resumen General */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-center gap-2 mb-2">
-                          <MessageSquare className="w-5 h-5 text-blue-600" />
-                          <h5 className="font-semibold text-blue-800">Sentimiento</h5>
-                        </div>
-                        <Badge className={getSentimentBg(analisisIA.sentiment)}>
-                          {analisisIA.sentiment === 'positivo' ? '😊 Positivo' :
-                           analisisIA.sentiment === 'negativo' ? '😞 Negativo' :
-                           '😐 Neutro'}
-                        </Badge>
-                        <p className="text-sm text-blue-700 mt-1">{analisisIA.tonoDeLlamada}</p>
-                      </div>
-
-                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Clock className="w-5 h-5 text-green-600" />
-                          <h5 className="font-semibold text-green-800">Duración</h5>
-                        </div>
-                        <p className="font-bold text-green-900">{formatTime(recordingTime)}</p>
-                        <p className="text-sm text-green-700">
-                          {analisisIA.duracionOptima ? '✅ Duración óptima' : '⚠️ Muy corta/larga'}
-                        </p>
-                      </div>
-
-                      <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                        <div className="flex items-center gap-2 mb-2">
-                          <TrendingUp className="w-5 h-5 text-purple-600" />
-                          <h5 className="font-semibold text-purple-800">Efectividad</h5>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-full bg-purple-200 rounded-full h-2">
-                            <div 
-                              className="bg-purple-600 h-2 rounded-full transition-all duration-1000"
-                              style={{ width: `${analisisIA.scoreGeneralLlamada}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-sm font-medium">{analisisIA.scoreGeneralLlamada}%</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Palabras Clave */}
-                    <div>
-                      <h5 className="font-semibold mb-2">Palabras Clave Detectadas:</h5>
-                      <div className="flex flex-wrap gap-2">
-                        {analisisIA.palabrasClave.map((palabra, idx) => (
-                          <Badge key={idx} variant="outline" className="bg-blue-50">
-                            {palabra}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Momentos Importantes */}
-                    <div>
-                      <h5 className="font-semibold mb-2">Momentos Importantes:</h5>
-                      <div className="space-y-2">
-                        {analisisIA.momentosImportantes.map((momento, idx) => (
-                          <div key={idx} className="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-xs font-bold text-green-700">
-                                {Math.floor(momento.tiempo / 60)}:{(momento.tiempo % 60).toString().padStart(2, '0')}
-                              </span>
-                            </div>
-                            <p className="text-sm text-green-800">{momento.descripcion}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Objeciones */}
-                    {analisisIA.objecionesDetectadas.length > 0 && (
-                      <div>
-                        <h5 className="font-semibold mb-2">Objeciones Detectadas:</h5>
-                        <div className="space-y-2">
-                          {analisisIA.objecionesDetectadas.map((objecion, idx) => (
-                            <div key={idx} className="flex items-center gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                              <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
-                              <p className="text-sm text-yellow-800">{objecion}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Recomendaciones */}
-                    <div>
-                      <h5 className="font-semibold mb-2">💡 Recomendaciones para Mejorar:</h5>
-                      <div className="space-y-2">
-                        {analisisIA.recomendaciones.map((rec, idx) => (
-                          <div key={idx} className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                            <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-blue-800">{rec}</p>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="flex items-center gap-4 px-6 py-3 bg-gray-50 rounded-lg">
+                      <div className={`w-4 h-4 rounded-full ${
+                        isRecording && !isPaused ? 'bg-red-500 animate-pulse' : 'bg-gray-400'
+                      }`} />
+                      <span className="text-2xl font-mono font-bold text-gray-900">
+                        {formatTime(recordingTime)}
+                      </span>
                     </div>
 
                     <Button 
-                      onClick={() => setShowAnalysis(!showAnalysis)}
-                      variant="outline" 
-                      className="w-full"
+                      onClick={stopRecording}
+                      size="lg"
+                      className="bg-gray-800 hover:bg-gray-900 px-6 py-4"
                     >
-                      <MessageSquare className="w-4 h-4 mr-2" />
-                      {showAnalysis ? 'Ocultar' : 'Ver'} Transcripción Completa
+                      <Square className="w-5 h-5 mr-2" />
+                      Finalizar
                     </Button>
+                  </div>
+                )}
+
+                {recordedAudio && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="space-y-4 w-full max-w-lg"
+                  >
+                    <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="font-medium text-green-800">
+                          Grabación completa: {formatDuration(recordedAudio.metadata.duration)}
+                        </p>
+                        <p className="text-sm text-green-600">
+                          Tamaño: {formatFileSize(recordedAudio.metadata.size)} • Calidad: {recordedAudio.metadata.quality}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <audio 
+                      controls 
+                      src={URL.createObjectURL(recordedAudio.blob)} 
+                      className="w-full h-12 rounded-lg"
+                    />
+
+                    <div className="flex gap-3">
+                      <Button onClick={() => setCurrentStep('upload')} className="flex-1">
+                        Continuar Procesamiento
+                      </Button>
+                      <Button onClick={resetRecording} variant="outline">
+                        Nueva Grabación
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Recording Configuration */}
+              {!isRecording && !recordedAudio && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto">
+                  <div>
+                    <Label htmlFor="tipoLlamada">Tipo de Llamada</Label>
+                    <Select value={tipoLlamada} onValueChange={setTipoLlamada}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="prospectacion">Prospección</SelectItem>
+                        <SelectItem value="seguimiento">Seguimiento</SelectItem>
+                        <SelectItem value="cierre">Cierre de Venta</SelectItem>
+                        <SelectItem value="postventa">Post-venta</SelectItem>
+                        <SelectItem value="visita_presencial">Visita Presencial</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="observaciones">Observaciones</Label>
+                    <Textarea
+                      id="observaciones"
+                      value={observaciones}
+                      onChange={(e) => setObservaciones(e.target.value)}
+                      placeholder="Notas previas..."
+                      rows={1}
+                    />
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Upload Step */}
+          {currentStep === 'upload' && recordedAudio && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center space-y-6"
+            >
+              <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
+                <Upload className="w-12 h-12 text-blue-600 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-blue-900 mb-2">
+                  Subir Grabación al Sistema
+                </h3>
+                <p className="text-blue-700 mb-4">
+                  Tu grabación se almacenará de forma segura y se preparará para el procesamiento con IA
+                </p>
+                
+                <Button 
+                  onClick={uploadAudio}
+                  disabled={isUploading}
+                  size="lg"
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Subiendo...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-5 h-5 mr-2" />
+                      Subir y Procesar
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Transcribe Step */}
+          {currentStep === 'transcribe' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center space-y-6"
+            >
+              <div className="p-6 bg-purple-50 border border-purple-200 rounded-lg">
+                <FileAudio className="w-12 h-12 text-purple-600 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-purple-900 mb-2">
+                  Transcripción con IA
+                </h3>
+                <p className="text-purple-700 mb-4">
+                  Convertimos tu audio en texto usando tecnología de transcripción avanzada
+                </p>
+                
+                <Button 
+                  onClick={transcribeAudio}
+                  disabled={isTranscribing}
+                  size="lg"
+                  className="bg-purple-600 hover:bg-purple-700"
+                >
+                  {isTranscribing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Transcribiendo...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare className="w-5 h-5 mr-2" />
+                      Iniciar Transcripción
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Analyze Step */}
+          {currentStep === 'analyze' && transcripcion && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              {/* Transcription Preview */}
+              <Card className="bg-gray-50">
+                <CardHeader>
+                  <CardTitle className="text-lg">Transcripción Completada</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="max-h-32 overflow-y-auto text-sm text-gray-700 bg-white p-3 rounded border">
+                    {transcripcion.substring(0, 300)}...
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="text-center p-6 bg-green-50 border border-green-200 rounded-lg">
+                <Sparkles className="w-12 h-12 text-green-600 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-green-900 mb-2">
+                  Análisis SPPC con IA
+                </h3>
+                <p className="text-green-700 mb-4">
+                  Analizamos tu conversación con los 15 pilares del sistema SPPC para generar insights precisos
+                </p>
+                
+                <Button 
+                  onClick={analyzeWithSPPC}
+                  disabled={isAnalyzing}
+                  size="lg"
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Analizando con IA...
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="w-5 h-5 mr-2" />
+                      Iniciar Análisis SPPC
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Complete Step - Analysis Results */}
+          {currentStep === 'complete' && analisisSPPC && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className={`border-2 ${getSentimentColor(analisisSPPC.resumenGeneral.sentimiento)}`}>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl mb-2">
+                      {getSentimentEmoji(analisisSPPC.resumenGeneral.sentimiento)}
+                    </div>
+                    <p className="font-semibold">
+                      {analisisSPPC.resumenGeneral.sentimiento.charAt(0).toUpperCase() + analisisSPPC.resumenGeneral.sentimiento.slice(1)}
+                    </p>
+                    <p className="text-sm opacity-75">Sentimiento general</p>
                   </CardContent>
                 </Card>
-              )}
 
-              {/* Transcripción */}
-              {showAnalysis && (
+                <Card className="border-2 border-blue-200 bg-blue-50">
+                  <CardContent className="p-4 text-center">
+                    <div className="text-3xl font-bold text-blue-600 mb-1">
+                      {analisisSPPC.resumenGeneral.puntuacionTotal}
+                    </div>
+                    <p className="font-semibold text-blue-900">Puntuación SPPC</p>
+                    <p className="text-sm text-blue-700">{analisisSPPC.resumenGeneral.clasificacion}</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-2 border-green-200 bg-green-50">
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl text-green-600 mb-2">
+                      <TrendingUp className="w-8 h-8 mx-auto" />
+                    </div>
+                    <p className="font-semibold text-green-900">
+                      {analisisSPPC.recomendaciones.length} Recomendaciones
+                    </p>
+                    <p className="text-sm text-green-700">Próximos pasos</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Key Insights */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Keywords */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Volume2 className="w-5 h-5" />
-                      Transcripción Completa
-                    </CardTitle>
+                    <CardTitle className="text-lg">Palabras Clave</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="bg-gray-50 p-4 rounded-lg border max-h-96 overflow-y-auto">
-                      <pre className="text-sm whitespace-pre-wrap">{transcripcion}</pre>
+                    <div className="flex flex-wrap gap-2">
+                      {analisisSPPC.resumenGeneral.palabrasClave?.map((keyword, idx) => (
+                        <Badge key={idx} variant="outline" className="bg-blue-50">
+                          {keyword}
+                        </Badge>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
-              )}
 
-              {/* Botones de Acción */}
-              <div className="flex items-center justify-center space-x-4">
+                {/* Important Moments */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Momentos Importantes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {analisisSPPC.resumenGeneral.momentosImportantes?.slice(0, 3).map((momento, idx) => (
+                        <div key={idx} className="flex items-start gap-2 p-2 bg-green-50 rounded">
+                          <Badge variant="secondary" className="text-xs">
+                            {momento.minuto}m
+                          </Badge>
+                          <p className="text-sm text-green-800">{momento.descripcion}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Recommendations */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    Recomendaciones Estratégicas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {analisisSPPC.recomendaciones.map((rec, idx) => (
+                      <div key={idx} className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-blue-800">{rec}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <Button 
-                  onClick={guardarGrabacion}
-                  className="bg-green-600 hover:bg-green-700 px-8 py-3"
+                  onClick={handleGuardarYFinalizar}
+                  className="flex-1 bg-green-600 hover:bg-green-700 h-12"
                 >
                   <CheckCircle className="w-5 h-5 mr-2" />
-                  Guardar Grabación y Análisis
+                  Finalizar y Guardar
                 </Button>
-
+                
+                <Button 
+                  onClick={() => setShowAnalysisDetails(true)}
+                  variant="outline"
+                  className="flex-1 h-12"
+                >
+                  <Brain className="w-5 h-5 mr-2" />
+                  Ver Análisis Detallado
+                </Button>
+                
                 <Button 
                   onClick={resetRecording}
                   variant="outline"
-                  className="px-8 py-3"
+                  className="h-12"
                 >
-                  Hacer Nueva Grabación
+                  Nueva Grabación
                 </Button>
               </div>
-            </div>
+            </motion.div>
           )}
         </CardContent>
       </Card>
+
+      {/* Detailed Analysis Modal would go here */}
+      {/* Implementation depends on your modal component preferences */}
     </div>
   );
 }

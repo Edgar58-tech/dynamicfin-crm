@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
         activo: true
       },
       include: {
-        prospectos: {
+        prospectosVendedor: {
           include: {
             calificaciones: {
               include: {
@@ -45,9 +45,9 @@ export async function GET(request: NextRequest) {
     });
 
     // Calcular métricas por vendedor
-    const rendimientoVendedores = vendedores.map(vendedor => {
-      const prospectoActivos = vendedor.prospectos.filter(p => p.estatus !== 'Cliente');
-      const ventasRealizadas = vendedor.prospectos.filter(p => p.estatus === 'Cliente').length;
+    const rendimientoVendedores = vendedores.map((vendedor: any) => {
+      const prospectoActivos = vendedor.prospectosVendedor?.filter((p: any) => p.estatus !== 'Cliente') || [];
+      const ventasRealizadas = vendedor.prospectosVendedor?.filter((p: any) => p.estatus === 'Cliente').length || 0;
       const meta = vendedor.metas[0]?.metaAutos || 0;
       
       return {
