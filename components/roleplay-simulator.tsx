@@ -100,11 +100,11 @@ export default function RolePlaySimulator({
 
     try {
       setIsSimulating(true);
+      setSessionStarted(true);
       startTimeRef.current = new Date();
       
-      // Iniciar la simulación sin mensaje
-      const response = await sendMessage('', true);
-      setSessionStarted(true);
+      // Limpiar mensajes anteriores
+      setMessages([]);
       
       // Mensaje de bienvenida del sistema
       const welcomeMessage: Message = {
@@ -116,10 +116,14 @@ export default function RolePlaySimulator({
       
       setMessages([welcomeMessage]);
       
+      // Iniciar la simulación con el primer mensaje del cliente IA
+      await sendMessage('', true);
+      
     } catch (error) {
       console.error('Error starting simulation:', error);
       toast.error('Error al iniciar la simulación');
       setIsSimulating(false);
+      setSessionStarted(false);
     }
   };
 
@@ -140,6 +144,10 @@ export default function RolePlaySimulator({
     }
     setIsTyping(true);
 
+    // ID único para el mensaje de IA que se va a crear
+    const aiMessageId = `ai-${Date.now()}`;
+    let aiResponseContent = '';
+
     try {
       const response = await fetch('/api/roleplay/simulate', {
         method: 'POST',
@@ -155,8 +163,16 @@ export default function RolePlaySimulator({
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
-      let aiResponseContent = '';
+
+      // Crear mensaje inicial de IA vacío
+      const initialAiMessage: Message = {
+        id: aiMessageId,
+        content: '',
+        sender: 'cliente_ia',
+        timestamp: new Date().toISOString()
+      };
+
+      setMessages(prev => [...prev, initialAiMessage]);
 
       while (true) {
         const { done, value } = await reader?.read() || {};
@@ -175,45 +191,41 @@ export default function RolePlaySimulator({
               
               if (parsed.status === 'streaming' && parsed.content) {
                 aiResponseContent += parsed.content;
-                // Actualizar mensaje en tiempo real
+                
+                // Actualizar el mensaje de IA específico durante el streaming
                 setMessages(prev => {
-                  const newMessages = [...prev];
-                  const lastMessage = newMessages[newMessages.length - 1];
-                  
-                  if (lastMessage?.sender === 'cliente_ia') {
-                    lastMessage.content = buffer + aiResponseContent;
-                  } else {
-                    newMessages.push({
-                      id: `ai-${Date.now()}`,
-                      content: buffer + aiResponseContent,
-                      sender: 'cliente_ia',
-                      timestamp: new Date().toISOString()
-                    });
-                  }
-                  
-                  return newMessages;
+                  return prev.map(msg => 
+                    msg.id === aiMessageId 
+                      ? { ...msg, content: aiResponseContent }
+                      : msg
+                  );
                 });
               } else if (parsed.status === 'completed') {
-                setSessionId(parsed.sessionId);
-                aiResponseContent = parsed.response;
+                // Actualizar sessionId si es necesario
+                if (parsed.sessionId && !sessionId) {
+                  setSessionId(parsed.sessionId);
+                }
                 
-                // Mensaje final del AI
-                const aiMessage: Message = {
-                  id: `ai-${Date.now()}`,
-                  content: aiResponseContent,
-                  sender: 'cliente_ia',
-                  timestamp: new Date().toISOString()
-                };
-
-                setMessages(prev => {
-                  const filtered = prev.filter(m => !m.id.startsWith('ai-temp'));
-                  return [...filtered, aiMessage];
-                });
-                
+                // Actualizar con la respuesta final completa
+                if (parsed.response) {
+                  aiResponseContent = parsed.response;
+                  setMessages(prev => {
+                    return prev.map(msg => 
+                      msg.id === aiMessageId 
+                        ? { ...msg, content: aiResponseContent }
+                        : msg
+                    );
+                  });
+                }
+                break;
+              } else if (parsed.status === 'error') {
+                console.error('API Error:', parsed.message);
+                toast.error(parsed.message || 'Error en la simulación');
                 break;
               }
             } catch (e) {
-              // Ignorar errores de parsing
+              // Ignorar errores de parsing JSON
+              console.warn('Error parsing streaming data:', e);
             }
           }
         }
@@ -222,6 +234,9 @@ export default function RolePlaySimulator({
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Error en la comunicación');
+      
+      // Remover el mensaje de IA vacío si hubo error
+      setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
     } finally {
       setIsTyping(false);
     }

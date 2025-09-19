@@ -191,6 +191,7 @@ Responde SOLO como el cliente, no rompas el personaje.
                     totalMessages: historialConversacion.length
                   });
                   controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
+                  controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
                   return;
                 }
                 
@@ -202,12 +203,14 @@ Responde SOLO como el cliente, no rompas el personaje.
                     const progressData = JSON.stringify({
                       status: 'streaming',
                       content: content,
-                      sessionId: rolePlaySession.id
+                      sessionId: rolePlaySession.id,
+                      totalContent: buffer
                     });
                     controller.enqueue(encoder.encode(`data: ${progressData}\n\n`));
                   }
                 } catch (e) {
                   // Ignorar errores de parsing JSON
+                  console.warn('Error parsing streaming JSON:', e);
                 }
               }
             }
@@ -216,7 +219,8 @@ Responde SOLO como el cliente, no rompas el personaje.
           console.error('Stream error:', error);
           const errorData = JSON.stringify({
             status: 'error',
-            message: 'Error en el streaming'
+            message: 'Error en el streaming',
+            error: error.message
           });
           controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
         } finally {
