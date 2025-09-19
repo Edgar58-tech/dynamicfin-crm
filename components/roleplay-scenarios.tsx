@@ -32,6 +32,8 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+// Importar datos de prueba
+import { roleplayScenarios, CATEGORIAS_ROLEPLAY, NIVELES_DIFICULTAD_ROLEPLAY, TIPOS_CLIENTE_AUTOMOTRIZ } from '@/app/roleplay-test/roleplayData';
 
 interface Scenario {
   id: number;
@@ -59,28 +61,10 @@ interface RolePlayScenariosProps {
   showManagement?: boolean;
 }
 
-const CATEGORIAS = [
-  { value: 'prospectacion', label: 'Prospección Inicial' },
-  { value: 'objeciones', label: 'Manejo de Objeciones' },
-  { value: 'cierre', label: 'Técnicas de Cierre' },
-  { value: 'situaciones_dificiles', label: 'Situaciones Difíciles' }
-];
-
-const TIPOS_CLIENTE = [
-  { value: 'indeciso', label: 'Cliente Indeciso' },
-  { value: 'precio_sensible', label: 'Sensible al Precio' },
-  { value: 'tecnico', label: 'Cliente Técnico' },
-  { value: 'impulsivo', label: 'Cliente Impulsivo' },
-  { value: 'desconfiado', label: 'Cliente Desconfiado' },
-  { value: 'informado', label: 'Cliente Informado' }
-];
-
-const NIVELES_DIFICULTAD = [
-  { value: 'principiante', label: '⭐ Principiante' },
-  { value: 'medio', label: '⭐⭐ Medio' },
-  { value: 'avanzado', label: '⭐⭐⭐ Avanzado' },
-  { value: 'experto', label: '⭐⭐⭐⭐ Experto' }
-];
+// Usar constantes importadas de los datos de prueba
+const CATEGORIAS = CATEGORIAS_ROLEPLAY;
+const TIPOS_CLIENTE = TIPOS_CLIENTE_AUTOMOTRIZ;
+const NIVELES_DIFICULTAD = NIVELES_DIFICULTAD_ROLEPLAY;
 
 export default function RolePlayScenarios({ 
   onSelectScenario, 
@@ -88,7 +72,8 @@ export default function RolePlayScenarios({
   selectedScenario,
   showManagement = false
 }: RolePlayScenariosProps) {
-  const { data: session } = useSession();
+  // const { data: session } = useSession();
+  const session = null;
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -116,27 +101,41 @@ export default function RolePlayScenarios({
 
   useEffect(() => {
     fetchScenarios();
-  }, []);
+  }, [categoryFilter, difficultyFilter, clientTypeFilter]);
 
   const fetchScenarios = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (categoryFilter) params.append('categoria', categoryFilter);
-      if (difficultyFilter) params.append('nivel', difficultyFilter);
-      if (clientTypeFilter) params.append('tipoCliente', clientTypeFilter);
-      params.append('activo', 'true');
-
-      const response = await fetch(`/api/roleplay/scenarios?${params.toString()}`);
-      if (response.ok) {
-        const data = await response.json();
-        setScenarios(data.scenarios);
-      } else {
-        toast.error('Error al cargar escenarios');
+      
+      // Simular delay de API para realismo
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Filtrar escenarios según los filtros aplicados
+      let filteredScenarios = roleplayScenarios.filter(scenario => scenario.activo);
+      
+      if (categoryFilter) {
+        filteredScenarios = filteredScenarios.filter(scenario => 
+          scenario.categoria === categoryFilter
+        );
       }
+      
+      if (difficultyFilter) {
+        filteredScenarios = filteredScenarios.filter(scenario => 
+          scenario.nivelDificultad === difficultyFilter
+        );
+      }
+      
+      if (clientTypeFilter) {
+        filteredScenarios = filteredScenarios.filter(scenario => 
+          scenario.tipoCliente === clientTypeFilter
+        );
+      }
+      
+      setScenarios(filteredScenarios);
+      toast.success(`${filteredScenarios.length} escenarios cargados exitosamente`);
     } catch (error) {
       console.error('Error fetching scenarios:', error);
-      toast.error('Error de conexión');
+      toast.error('Error al cargar escenarios');
     } finally {
       setLoading(false);
     }
@@ -144,32 +143,38 @@ export default function RolePlayScenarios({
 
   const createScenario = async () => {
     try {
-      const scenarioData = {
+      // Simular creación de escenario (en implementación real se enviaría a API)
+      const newScenario = {
+        id: Math.max(...roleplayScenarios.map(s => s.id)) + 1,
         ...formData,
-        presupuestoCliente: formData.presupuestoCliente ? parseFloat(formData.presupuestoCliente) : null,
-        objetivosAprendizaje: formData.objetivosAprendizaje.split(',').map(s => s.trim()).filter(s => s),
-        objecionesComunes: formData.objecionesComunes.split(',').map(s => s.trim()).filter(s => s),
-        etiquetas: formData.etiquetas.split(',').map(s => s.trim()).filter(s => s)
+        presupuestoCliente: formData.presupuestoCliente ? parseFloat(formData.presupuestoCliente) : undefined,
+        activo: true,
+        completadoVeces: 0,
+        etiquetas: formData.etiquetas.split(',').map(s => s.trim()).filter(s => s),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        // Campos específicos SPCC (valores por defecto para demo)
+        pilaresSPCC: ["Saludo y Primera Impresión", "Prospección Efectiva"],
+        contextoCliente: "Cliente de prueba creado desde interfaz",
+        objetivoEscenario: "Practicar habilidades básicas de venta",
+        objecionesEsperadas: ["Necesito pensarlo", "Está muy caro"],
+        respuestasSugeridas: ["Entiendo su preocupación", "Permíteme explicarte el valor"],
+        metricasExito: ["Obtener información de contacto", "Agendar segunda cita"],
+        situacionInicial: "Cliente entra al showroom",
+        trasfondoCliente: "Cliente potencial interesado",
+        desafiosEspecificos: ["Establecer rapport inicial"]
       };
 
-      const response = await fetch('/api/roleplay/scenarios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(scenarioData)
-      });
-
-      if (response.ok) {
-        toast.success('Escenario creado exitosamente');
-        setShowCreateDialog(false);
-        resetForm();
-        fetchScenarios();
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Error al crear escenario');
-      }
+      // En implementación real, esto se enviaría a la API
+      roleplayScenarios.push(newScenario as any);
+      
+      toast.success('Escenario creado exitosamente (modo demo)');
+      setShowCreateDialog(false);
+      resetForm();
+      fetchScenarios();
     } catch (error) {
       console.error('Error creating scenario:', error);
-      toast.error('Error de conexión');
+      toast.error('Error al crear escenario');
     }
   };
 
@@ -177,33 +182,25 @@ export default function RolePlayScenarios({
     if (!editingScenario) return;
 
     try {
-      const scenarioData = {
-        id: editingScenario.id,
-        ...formData,
-        presupuestoCliente: formData.presupuestoCliente ? parseFloat(formData.presupuestoCliente) : null,
-        objetivosAprendizaje: formData.objetivosAprendizaje.split(',').map(s => s.trim()).filter(s => s),
-        objecionesComunes: formData.objecionesComunes.split(',').map(s => s.trim()).filter(s => s),
-        etiquetas: formData.etiquetas.split(',').map(s => s.trim()).filter(s => s)
-      };
-
-      const response = await fetch('/api/roleplay/scenarios', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(scenarioData)
-      });
-
-      if (response.ok) {
-        toast.success('Escenario actualizado exitosamente');
-        setEditingScenario(null);
-        resetForm();
-        fetchScenarios();
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Error al actualizar escenario');
+      // Simular actualización de escenario (en implementación real se enviaría a API)
+      const scenarioIndex = roleplayScenarios.findIndex(s => s.id === editingScenario.id);
+      if (scenarioIndex !== -1) {
+        roleplayScenarios[scenarioIndex] = {
+          ...roleplayScenarios[scenarioIndex],
+          ...formData,
+          presupuestoCliente: formData.presupuestoCliente ? parseFloat(formData.presupuestoCliente) : undefined,
+          etiquetas: formData.etiquetas.split(',').map(s => s.trim()).filter(s => s),
+          updatedAt: new Date().toISOString()
+        };
       }
+
+      toast.success('Escenario actualizado exitosamente (modo demo)');
+      setEditingScenario(null);
+      resetForm();
+      fetchScenarios();
     } catch (error) {
       console.error('Error updating scenario:', error);
-      toast.error('Error de conexión');
+      toast.error('Error al actualizar escenario');
     }
   };
 
@@ -211,20 +208,17 @@ export default function RolePlayScenarios({
     if (!confirm('¿Estás seguro de que quieres eliminar este escenario?')) return;
 
     try {
-      const response = await fetch(`/api/roleplay/scenarios?id=${id}`, {
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-        toast.success('Escenario eliminado exitosamente');
-        fetchScenarios();
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Error al eliminar escenario');
+      // Simular eliminación de escenario (en implementación real se enviaría a API)
+      const scenarioIndex = roleplayScenarios.findIndex(s => s.id === id);
+      if (scenarioIndex !== -1) {
+        roleplayScenarios.splice(scenarioIndex, 1);
       }
+
+      toast.success('Escenario eliminado exitosamente (modo demo)');
+      fetchScenarios();
     } catch (error) {
       console.error('Error deleting scenario:', error);
-      toast.error('Error de conexión');
+      toast.error('Error al eliminar escenario');
     }
   };
 
