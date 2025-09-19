@@ -113,19 +113,19 @@ export default function RolePlayScenarios({
       // Filtrar escenarios según los filtros aplicados
       let filteredScenarios = roleplayScenarios.filter(scenario => scenario.activo);
       
-      if (categoryFilter) {
+      if (categoryFilter && categoryFilter !== 'all') {
         filteredScenarios = filteredScenarios.filter(scenario => 
           scenario.categoria === categoryFilter
         );
       }
       
-      if (difficultyFilter) {
+      if (difficultyFilter && difficultyFilter !== 'all') {
         filteredScenarios = filteredScenarios.filter(scenario => 
           scenario.nivelDificultad === difficultyFilter
         );
       }
       
-      if (clientTypeFilter) {
+      if (clientTypeFilter && clientTypeFilter !== 'all') {
         filteredScenarios = filteredScenarios.filter(scenario => 
           scenario.tipoCliente === clientTypeFilter
         );
@@ -376,7 +376,7 @@ export default function RolePlayScenarios({
                           <SelectValue placeholder="Selecciona categoría" />
                         </SelectTrigger>
                         <SelectContent>
-                          {CATEGORIAS.map(cat => (
+                          {CATEGORIAS.filter(cat => cat.value && cat.value.trim() !== '').map(cat => (
                             <SelectItem key={cat.value} value={cat.value}>
                               {cat.label}
                             </SelectItem>
@@ -395,7 +395,7 @@ export default function RolePlayScenarios({
                           <SelectValue placeholder="Selecciona tipo" />
                         </SelectTrigger>
                         <SelectContent>
-                          {TIPOS_CLIENTE.map(tipo => (
+                          {TIPOS_CLIENTE.filter(tipo => tipo.value && tipo.value.trim() !== '').map(tipo => (
                             <SelectItem key={tipo.value} value={tipo.value}>
                               {tipo.label}
                             </SelectItem>
@@ -416,7 +416,7 @@ export default function RolePlayScenarios({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {NIVELES_DIFICULTAD.map(nivel => (
+                          {NIVELES_DIFICULTAD.filter(nivel => nivel.value && nivel.value.trim() !== '').map(nivel => (
                             <SelectItem key={nivel.value} value={nivel.value}>
                               {nivel.label}
                             </SelectItem>
@@ -501,8 +501,8 @@ export default function RolePlayScenarios({
             <SelectValue placeholder="Todas las categorías" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todas las categorías</SelectItem>
-            {CATEGORIAS.map(cat => (
+            <SelectItem value="all">Todas las categorías</SelectItem>
+            {CATEGORIAS.filter(cat => cat.value && cat.value.trim() !== '').map(cat => (
               <SelectItem key={cat.value} value={cat.value}>
                 {cat.label}
               </SelectItem>
@@ -515,8 +515,8 @@ export default function RolePlayScenarios({
             <SelectValue placeholder="Dificultad" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todas</SelectItem>
-            {NIVELES_DIFICULTAD.map(nivel => (
+            <SelectItem value="all">Todas</SelectItem>
+            {NIVELES_DIFICULTAD.filter(nivel => nivel.value && nivel.value.trim() !== '').map(nivel => (
               <SelectItem key={nivel.value} value={nivel.value}>
                 {nivel.label}
               </SelectItem>
