@@ -140,6 +140,15 @@ export function Sidebar() {
       featured: true,
     },
 
+    // SECCIÓN GRABACIÓN POR PROXIMIDAD
+    {
+      title: '📍 Grabación Proximidad',
+      href: '/dashboard/grabacion-proximidad',
+      icon: Activity,
+      roles: ['VENDEDOR', 'GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_MARCA', 'DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'],
+      featured: true,
+    },
+
     // Continuación sección gerencial
     ...(session?.user?.rol === 'GERENTE_VENTAS' ? [
       {
