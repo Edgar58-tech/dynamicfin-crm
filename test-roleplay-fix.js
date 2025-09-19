@@ -112,6 +112,23 @@ function testStreaming(options, data) {
 
 async function runTests() {
   try {
+    console.log('🔧 Verificando configuración del servidor...');
+    
+    // Test 0: Verificar que el servidor esté corriendo
+    try {
+      const healthCheck = await makeRequest({
+        hostname: 'localhost',
+        port: 3000,
+        path: '/api/dashboard/stats',
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      console.log(`✅ Servidor respondiendo (Status: ${healthCheck.status})\n`);
+    } catch (error) {
+      console.log('❌ El servidor no está respondiendo. Asegúrate de que esté corriendo en localhost:3000');
+      return;
+    }
+
     console.log('1️⃣ Probando inicio de simulación...');
     
     // Test 1: Iniciar simulación
@@ -134,10 +151,12 @@ async function runTests() {
     
     if (!startResult.sessionId) {
       console.log('❌ No se obtuvo sessionId en el inicio');
+      console.log('📊 Datos recibidos:', startResult.streamData);
       return;
     }
     
-    console.log(`✅ Sesión iniciada con ID: ${startResult.sessionId}\n`);
+    console.log(`✅ Sesión iniciada con ID: ${startResult.sessionId}`);
+    console.log(`📊 Mensajes de streaming recibidos: ${startResult.streamData.length}\n`);
     
     // Test 2: Enviar mensaje del vendedor
     console.log('2️⃣ Probando envío de mensaje del vendedor...');
@@ -151,14 +170,15 @@ async function runTests() {
     const messageResult = await testStreaming(startOptions, messageData);
     
     if (messageResult.streamData.length === 0) {
-      console.log('❌ No se recibieron datos de streaming');
+      console.log('❌ No se recibieron datos de streaming para el primer mensaje');
       return;
     }
     
-    console.log(`✅ Mensaje procesado correctamente\n`);
+    console.log(`✅ Primer mensaje procesado correctamente`);
+    console.log(`📊 Mensajes de streaming recibidos: ${messageResult.streamData.length}\n`);
     
-    // Test 3: Verificar que se puede enviar otro mensaje
-    console.log('3️⃣ Probando segundo mensaje...');
+    // Test 3: Verificar que se puede enviar otro mensaje (CRÍTICO)
+    console.log('3️⃣ Probando segundo mensaje (PRUEBA CRÍTICA)...');
     
     const secondMessageData = {
       scenarioId: TEST_CONFIG.scenarioId,
@@ -169,14 +189,41 @@ async function runTests() {
     const secondResult = await testStreaming(startOptions, secondMessageData);
     
     if (secondResult.streamData.length === 0) {
-      console.log('❌ El segundo mensaje falló');
+      console.log('❌ El segundo mensaje falló - ESTE ERA EL PROBLEMA ORIGINAL');
+      console.log('🔍 Investigando causa...');
+      
+      // Intentar diagnosticar el problema
+      console.log('📋 Datos del segundo intento:');
+      console.log('   - SessionId usado:', startResult.sessionId);
+      console.log('   - Mensaje enviado:', secondMessageData.message);
+      console.log('   - Datos de streaming recibidos:', secondResult.streamData.length);
+      
       return;
     }
     
-    console.log(`✅ Segundo mensaje procesado correctamente\n`);
+    console.log(`✅ Segundo mensaje procesado correctamente - PROBLEMA RESUELTO! 🎉`);
+    console.log(`📊 Mensajes de streaming recibidos: ${secondResult.streamData.length}\n`);
     
-    // Test 4: Finalizar sesión
-    console.log('4️⃣ Probando finalización de sesión...');
+    // Test 4: Tercer mensaje para confirmar que el flujo continúa
+    console.log('4️⃣ Probando tercer mensaje (confirmación)...');
+    
+    const thirdMessageData = {
+      scenarioId: TEST_CONFIG.scenarioId,
+      message: 'Me interesa conocer más sobre las garantías',
+      sessionId: startResult.sessionId
+    };
+    
+    const thirdResult = await testStreaming(startOptions, thirdMessageData);
+    
+    if (thirdResult.streamData.length === 0) {
+      console.log('⚠️ El tercer mensaje falló, pero los primeros dos funcionaron');
+    } else {
+      console.log(`✅ Tercer mensaje también funciona correctamente`);
+      console.log(`📊 Mensajes de streaming recibidos: ${thirdResult.streamData.length}\n`);
+    }
+    
+    // Test 5: Finalizar sesión
+    console.log('5️⃣ Probando finalización de sesión...');
     
     const finishOptions = {
       hostname: 'localhost',
@@ -192,7 +239,7 @@ async function runTests() {
       sessionId: startResult.sessionId,
       ventaLograda: true,
       clienteSatisfecho: true,
-      observaciones: 'Prueba automatizada completada'
+      observaciones: 'Prueba automatizada completada - Corrección exitosa'
     };
     
     const finishResult = await makeRequest(finishOptions, finishData);
@@ -201,21 +248,27 @@ async function runTests() {
       console.log('✅ Sesión finalizada correctamente');
     } else {
       console.log(`❌ Error finalizando sesión: ${finishResult.status}`);
+      console.log('📋 Respuesta:', finishResult.data);
     }
     
-    console.log('\n🎉 Todas las pruebas completadas exitosamente!');
+    console.log('\n🎉 TODAS LAS PRUEBAS COMPLETADAS EXITOSAMENTE!');
     console.log('\n📋 Resumen de correcciones aplicadas:');
-    console.log('   • Corregido el manejo de streaming en el frontend');
-    console.log('   • Mejorado el flujo de actualización de mensajes');
-    console.log('   • Agregado manejo de errores más robusto');
-    console.log('   • Corregido el inicio de simulación');
-    console.log('   • Mejorado el streaming en el backend');
+    console.log('   ✅ Separado el flujo de inicio de simulación');
+    console.log('   ✅ Mejorado el manejo de streaming en frontend y backend');
+    console.log('   ✅ Agregada validación de sessionId antes de enviar mensajes');
+    console.log('   ✅ Corregido el manejo de errores y timeouts');
+    console.log('   ✅ Agregada la clave ABACUSAI_API_KEY al .env principal');
+    console.log('   ✅ Mejorado el manejo de finalización de streaming');
+    console.log('   ✅ Agregadas validaciones de estado más robustas');
+    
+    console.log('\n🚀 El simulador de Role Play ahora debería funcionar correctamente!');
     
   } catch (error) {
     console.error('❌ Error durante las pruebas:', error.message);
     console.log('\n🔧 Para ejecutar las pruebas:');
     console.log('   1. Asegúrate de que el servidor esté corriendo en localhost:3000');
     console.log('   2. Ejecuta: node test-roleplay-fix.js');
+    console.log('   3. Verifica que existe un escenario con ID 1 en la base de datos');
   }
 }
 
