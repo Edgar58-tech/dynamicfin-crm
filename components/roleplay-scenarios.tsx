@@ -92,9 +92,9 @@ export default function RolePlayScenarios({
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [difficultyFilter, setDifficultyFilter] = useState('');
-  const [clientTypeFilter, setClientTypeFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [difficultyFilter, setDifficultyFilter] = useState('all');
+  const [clientTypeFilter, setClientTypeFilter] = useState('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingScenario, setEditingScenario] = useState<Scenario | null>(null);
 
@@ -122,9 +122,9 @@ export default function RolePlayScenarios({
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      if (categoryFilter) params.append('categoria', categoryFilter);
-      if (difficultyFilter) params.append('nivel', difficultyFilter);
-      if (clientTypeFilter) params.append('tipoCliente', clientTypeFilter);
+      if (categoryFilter && categoryFilter !== 'all') params.append('categoria', categoryFilter);
+      if (difficultyFilter && difficultyFilter !== 'all') params.append('nivel', difficultyFilter);
+      if (clientTypeFilter && clientTypeFilter !== 'all') params.append('tipoCliente', clientTypeFilter);
       params.append('activo', 'true');
 
       const response = await fetch(`/api/roleplay/scenarios?${params.toString()}`);
@@ -507,7 +507,7 @@ export default function RolePlayScenarios({
             <SelectValue placeholder="Todas las categorías" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todas las categorías</SelectItem>
+            <SelectItem value="all">Todas las categorías</SelectItem>
             {CATEGORIAS.map(cat => (
               <SelectItem key={cat.value} value={cat.value}>
                 {cat.label}
@@ -521,7 +521,7 @@ export default function RolePlayScenarios({
             <SelectValue placeholder="Dificultad" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todas</SelectItem>
+            <SelectItem value="all">Todas</SelectItem>
             {NIVELES_DIFICULTAD.map(nivel => (
               <SelectItem key={nivel.value} value={nivel.value}>
                 {nivel.label}
