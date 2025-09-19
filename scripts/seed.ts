@@ -10,7 +10,7 @@ async function main() {
   // Hash passwords for demo users
   const hashedPasswordDirectores = await bcrypt.hash('PrivXejc#6', 12);
   const hashedPasswordAdmin = await bcrypt.hash('Rada#94', 12);
-  const hashedPasswordDemo = await bcrypt.hash('gerente1213', 12);
+  const hashedPasswordDemo = await bcrypt.hash('gerente123', 12);
   const hashedPasswordVendedor = await bcrypt.hash('vendedor123', 12);
   const hashedPasswordRecep = await bcrypt.hash('recep123', 12);
   const hashedPasswordTest = await bcrypt.hash('johndoe123', 12);
@@ -94,10 +94,10 @@ async function main() {
   });
 
   await prisma.user.upsert({
-    where: { email: 'recepaudi@demo.com' },
+    where: { email: 'recepaud@demo.com' },
     update: {},
     create: {
-      email: 'recepaudi@demo.com',
+      email: 'recepaud@demo.com',
       name: 'Recepción Audi Demo',
       nombre: 'Recepción Audi',
       apellido: 'Demo',
@@ -113,9 +113,9 @@ async function main() {
    - 2 Super Administrators (directores@dynamicfin.mx, admin@dynamicfin.mx)
    - 1 Test User (hidden)
    - 3 Demo Users for Quick Login:
-     * gerenteaudi@demo.com / gerente1213
+     * gerenteaudi@demo.com / gerente123
      * vendedoraudi@demo.com / vendedor123  
-     * recepaudi@demo.com / recep123
+     * recepaud@demo.com / recep123
 
 🚀 System ready for demo with 3 quick login buttons!
 `);
