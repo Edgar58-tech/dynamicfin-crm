@@ -100,11 +100,11 @@ export default function RolePlaySimulator({
 
     try {
       setIsSimulating(true);
+      setSessionStarted(true);
       startTimeRef.current = new Date();
       
-      // Iniciar la simulación sin mensaje
-      const response = await sendMessage('', true);
-      setSessionStarted(true);
+      // Limpiar mensajes anteriores
+      setMessages([]);
       
       // Mensaje de bienvenida del sistema
       const welcomeMessage: Message = {
@@ -116,29 +116,26 @@ export default function RolePlaySimulator({
       
       setMessages([welcomeMessage]);
       
+      // Esperar un momento para que se renderice el mensaje de bienvenida
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Iniciar la simulación con el primer mensaje del cliente IA
+      await sendInitialMessage();
+      
     } catch (error) {
       console.error('Error starting simulation:', error);
       toast.error('Error al iniciar la simulación');
       setIsSimulating(false);
+      setSessionStarted(false);
     }
   };
 
-  const sendMessage = async (message: string = currentMessage, isStart = false) => {
-    if (!message.trim() && !isStart) return;
-    if (isTyping) return;
-
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      content: message,
-      sender: 'vendedor',
-      timestamp: new Date().toISOString()
-    };
-
-    if (!isStart) {
-      setMessages(prev => [...prev, userMessage]);
-      setCurrentMessage('');
-    }
+  const sendInitialMessage = async () => {
     setIsTyping(true);
+
+    // ID único para el mensaje inicial de IA
+    const aiMessageId = `ai-initial-${Date.now()}`;
+    let aiResponseContent = '';
 
     try {
       const response = await fetch('/api/roleplay/simulate', {
@@ -146,17 +143,27 @@ export default function RolePlaySimulator({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scenarioId: scenario?.id,
-          message: isStart ? undefined : message,
-          sessionId: sessionId
+          message: undefined, // Mensaje inicial
+          sessionId: null
         })
       });
 
-      if (!response.ok) throw new Error('Error en la simulación');
+      if (!response.ok) {
+        throw new Error(`Error en la simulación: ${response.status}`);
+      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
-      let aiResponseContent = '';
+
+      // Crear mensaje inicial de IA vacío
+      const initialAiMessage: Message = {
+        id: aiMessageId,
+        content: '',
+        sender: 'cliente_ia',
+        timestamp: new Date().toISOString()
+      };
+
+      setMessages(prev => [...prev, initialAiMessage]);
 
       while (true) {
         const { done, value } = await reader?.read() || {};
@@ -175,53 +182,203 @@ export default function RolePlaySimulator({
               
               if (parsed.status === 'streaming' && parsed.content) {
                 aiResponseContent += parsed.content;
-                // Actualizar mensaje en tiempo real
+                
+                // Actualizar el mensaje de IA específico durante el streaming
                 setMessages(prev => {
-                  const newMessages = [...prev];
-                  const lastMessage = newMessages[newMessages.length - 1];
-                  
-                  if (lastMessage?.sender === 'cliente_ia') {
-                    lastMessage.content = buffer + aiResponseContent;
-                  } else {
-                    newMessages.push({
-                      id: `ai-${Date.now()}`,
-                      content: buffer + aiResponseContent,
-                      sender: 'cliente_ia',
-                      timestamp: new Date().toISOString()
-                    });
-                  }
-                  
-                  return newMessages;
+                  return prev.map(msg => 
+                    msg.id === aiMessageId 
+                      ? { ...msg, content: aiResponseContent }
+                      : msg
+                  );
                 });
               } else if (parsed.status === 'completed') {
-                setSessionId(parsed.sessionId);
-                aiResponseContent = parsed.response;
+                // Actualizar sessionId si es necesario
+                if (parsed.sessionId && !sessionId) {
+                  setSessionId(parsed.sessionId);
+                }
                 
-                // Mensaje final del AI
-                const aiMessage: Message = {
-                  id: `ai-${Date.now()}`,
-                  content: aiResponseContent,
-                  sender: 'cliente_ia',
-                  timestamp: new Date().toISOString()
-                };
-
-                setMessages(prev => {
-                  const filtered = prev.filter(m => !m.id.startsWith('ai-temp'));
-                  return [...filtered, aiMessage];
-                });
-                
+                // Actualizar con la respuesta final completa
+                if (parsed.response) {
+                  aiResponseContent = parsed.response;
+                  setMessages(prev => {
+                    return prev.map(msg => 
+                      msg.id === aiMessageId 
+                        ? { ...msg, content: aiResponseContent }
+                        : msg
+                    );
+                  });
+                }
+                break;
+              } else if (parsed.status === 'error') {
+                console.error('API Error:', parsed.message);
+                toast.error(parsed.message || 'Error en la simulación');
                 break;
               }
             } catch (e) {
-              // Ignorar errores de parsing
+              // Ignorar errores de parsing JSON
+              console.warn('Error parsing streaming data:', e);
             }
           }
         }
       }
 
     } catch (error) {
+      console.error('Error sending initial message:', error);
+      toast.error('Error iniciando la conversación');
+      
+      // Remover el mensaje de IA vacío si hubo error
+      setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
+      
+      // Reset simulation state on error
+      setIsSimulating(false);
+      setSessionStarted(false);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const sendMessage = async (message: string = currentMessage, isStart = false) => {
+    if (!message.trim() && !isStart) return;
+    if (isTyping) return;
+
+    // Validar que tenemos sessionId para mensajes que no son de inicio
+    if (!isStart && !sessionId) {
+      toast.error('Error: No hay sesión activa');
+      return;
+    }
+
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      content: message,
+      sender: 'vendedor',
+      timestamp: new Date().toISOString()
+    };
+
+    if (!isStart) {
+      setMessages(prev => [...prev, userMessage]);
+      setCurrentMessage('');
+    }
+    setIsTyping(true);
+
+    // ID único para el mensaje de IA que se va a crear
+    const aiMessageId = `ai-${Date.now()}`;
+    let aiResponseContent = '';
+
+    try {
+      const response = await fetch('/api/roleplay/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scenarioId: scenario?.id,
+          message: isStart ? undefined : message,
+          sessionId: sessionId
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      // Crear mensaje inicial de IA vacío
+      const initialAiMessage: Message = {
+        id: aiMessageId,
+        content: '',
+        sender: 'cliente_ia',
+        timestamp: new Date().toISOString()
+      };
+
+      setMessages(prev => [...prev, initialAiMessage]);
+
+      let streamCompleted = false;
+
+      while (true) {
+        const { done, value } = await reader?.read() || {};
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              streamCompleted = true;
+              break;
+            }
+            
+            try {
+              const parsed = JSON.parse(data);
+              
+              if (parsed.status === 'streaming' && parsed.content) {
+                aiResponseContent += parsed.content;
+                
+                // Actualizar el mensaje de IA específico durante el streaming
+                setMessages(prev => {
+                  return prev.map(msg => 
+                    msg.id === aiMessageId 
+                      ? { ...msg, content: aiResponseContent }
+                      : msg
+                  );
+                });
+              } else if (parsed.status === 'completed') {
+                // Actualizar sessionId si es necesario
+                if (parsed.sessionId && !sessionId) {
+                  setSessionId(parsed.sessionId);
+                }
+                
+                // Actualizar con la respuesta final completa
+                if (parsed.response) {
+                  aiResponseContent = parsed.response;
+                  setMessages(prev => {
+                    return prev.map(msg => 
+                      msg.id === aiMessageId 
+                        ? { ...msg, content: aiResponseContent }
+                        : msg
+                    );
+                  });
+                }
+                streamCompleted = true;
+                break;
+              } else if (parsed.status === 'error') {
+                console.error('API Error:', parsed.message);
+                toast.error(parsed.message || 'Error en la simulación');
+                throw new Error(parsed.message || 'Error en la simulación');
+              }
+            } catch (e) {
+              if (e.message && e.message.includes('Error en la simulación')) {
+                throw e; // Re-throw simulation errors
+              }
+              // Ignorar errores de parsing JSON
+              console.warn('Error parsing streaming data:', e);
+            }
+          }
+        }
+        
+        if (streamCompleted) break;
+      }
+
+      // Verificar que el streaming se completó correctamente
+      if (!streamCompleted) {
+        throw new Error('El streaming no se completó correctamente');
+      }
+
+    } catch (error) {
       console.error('Error sending message:', error);
-      toast.error('Error en la comunicación');
+      toast.error('Error en la comunicación con el servidor');
+      
+      // Remover el mensaje de IA vacío si hubo error
+      setMessages(prev => prev.filter(msg => msg.id !== aiMessageId));
+      
+      // Si es un error crítico, resetear el estado
+      if (error.message.includes('Error 401') || error.message.includes('Error 500')) {
+        setIsSimulating(false);
+        setSessionStarted(false);
+        setSessionId(null);
+      }
     } finally {
       setIsTyping(false);
     }

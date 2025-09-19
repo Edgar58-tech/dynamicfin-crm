@@ -205,11 +205,16 @@ export function SimpleLogin() {
 
           {/* Información de Credenciales */}
           <div className="bg-blue-50 rounded-lg p-4 text-sm">
-            <h4 className="font-semibold text-blue-800 mb-2">💡 Credenciales Demo:</h4>
+            <h4 className="font-semibold text-blue-800 mb-2">💡 Credenciales Demo (Actualizadas):</h4>
             <div className="space-y-1 text-blue-700 text-xs">
-              <div>👔 <strong>Gerente:</strong> gerenteaudi@demo.com / gerente1213</div>
+              <div>👔 <strong>Gerente:</strong> gerenteaudi@demo.com / <span className="bg-yellow-200 px-1 rounded">gerente1213</span></div>
               <div>👤 <strong>Vendedor:</strong> vendedoraudi@demo.com / vendedor123</div>
-              <div>🎧 <strong>Centro de Leads:</strong> recepaudi@demo.com / recep123</div>
+              <div>🎧 <strong>Centro de Leads:</strong> recepaudi@demo.com / <span className="bg-yellow-200 px-1 rounded">recep123</span></div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-blue-200">
+              <div className="text-xs text-blue-600">
+                ✅ Base de datos actualizada: {new Date().toLocaleString('es-ES')}
+              </div>
             </div>
           </div>
         </CardContent>
