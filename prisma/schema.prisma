@@ -114,6 +114,10 @@ model Agencia {
   // Relaciones CRM externo
   configuracionesCrm CrmConfiguration[]
   
+  // Relaciones Grabación por Proximidad
+  zonasProximidad   ZonaProximidad[]
+  metricasProximidad MetricasProximidad[]
+  
   @@map("agencias")
 }
 
@@ -191,6 +195,17 @@ model User {
   // Relaciones CRM externo
   crmSyncLogs               CrmSyncLog[] @relation("CrmSyncLogUsuario")
   
+  // Relaciones Grabación por Proximidad
+  configuracionesProximidad ConfiguracionProximidad[] @relation("ConfiguracionProximidadVendedor")
+  grabacionesProximidad     GrabacionProximidad[] @relation("GrabacionProximidadVendedor")
+  logsProximidad            LogProximidad[] @relation("LogProximidadVendedor")
+  
+  // Relaciones Role Play
+  rolePlaySessions          RolePlaySession[] @relation("RolePlaySessionsVendedor")
+  rolePlayEvaluations       RolePlayEvaluation[] @relation("RolePlayEvaluationsVendedor")
+  rolePlayProgress          RolePlayProgress[] @relation("RolePlayProgressVendedor")
+  rolePlayFeedback          RolePlayFeedback[] @relation("RolePlayFeedbackVendedor")
+  
   @@map("usuarios")
 }
 
@@ -258,6 +273,9 @@ model Prospecto {
   llamadasEntrantes  RegistroLlamadaEntrante[] @relation("LlamadaEntrante")
   visitasShowroomNuevas VisitaShowroom[] @relation("VisitaShowroom")
   asignacionLead     AsignacionLead? @relation("AsignacionesProspecto")
+  
+  // Relaciones Grabación por Proximidad
+  grabacionesProximidad GrabacionProximidad[] @relation("GrabacionProximidadProspecto")
   
   @@map("prospectos")
 }
@@ -576,13 +594,27 @@ model GrabacionConversacion {
   dispositivoGrabacion  String?  // "web", "mobile", "desktop"
   ipOrigen              String?  // IP desde donde se hizo la grabación
   
+  // Campos específicos para Grabación por Proximidad
+  esGrabacionProximidad Boolean  @default(false) // Indica si fue iniciada por proximidad
+  zonaProximidadId      Int?     // Zona que activó la grabación
+  ubicacionGrabacion    String?  @db.Text // JSON con coordenadas donde se grabó
+  tipoActivacionProximidad String? // "automatica", "manual", "confirmacion"
+  distanciaZonaMetros   Decimal? @db.Decimal(8, 3) // Distancia promedio a la zona en metros
+  precisionGPSGrabacion Decimal? @db.Decimal(8, 3) // Precisión GPS durante la grabación
+  contextoProximidad    String?  // "showroom", "test_drive", "entrega", "reunion", "otro"
+  
   prospecto             Prospecto @relation(fields: [prospectoId], references: [id])
   vendedor              User      @relation("GrabacionesVendedor", fields: [vendedorId], references: [id])
+  
+  // Relaciones Grabación por Proximidad
+  grabacionesProximidad GrabacionProximidad[] @relation("GrabacionConversacionProximidad")
   
   @@index([vendedorId])
   @@index([prospectoId])
   @@index([fechaGrabacion])
   @@index([procesado])
+  @@index([esGrabacionProximidad])
+  @@index([zonaProximidadId])
   @@map("grabaciones_conversaciones")
 }
 
@@ -993,4 +1025,450 @@ model CrmMetrics {
   @@unique([crmConfigurationId, fecha])
   @@index([fecha])
   @@map("crm_metrics")
+}
+
+// ================== SISTEMA DE GRABACIÓN POR PROXIMIDAD ==================
+
+// Definición de zonas de proximidad geográficas
+model ZonaProximidad {
+  id                    Int      @id @default(autoincrement())
+  agenciaId             Int
+  nombre                String   // "Showroom Principal", "Área Test Drive", "Estacionamiento"
+  descripcion           String?
+  tipo                  String   // "showroom", "test_drive", "estacionamiento", "oficina", "custom"
+  // Coordenadas del centro de la zona
+  latitud               Decimal  @db.Decimal(10, 8)
+  longitud              Decimal  @db.Decimal(11, 8)
+  // Radio de proximidad en metros
+  radioMetros           Int      @default(50)
+  // Coordenadas para zona poligonal (opcional)
+  coordenadas           String?  @db.Text // JSON con array de coordenadas para polígono
+  // Configuración de grabación
+  activarGrabacion      Boolean  @default(true)
+  tipoGrabacion         String   @default("automatica") // "automatica", "confirmacion", "manual"
+  duracionMaxima        Int      @default(3600) // segundos
+  calidadGrabacion      String   @default("media") // "baja", "media", "alta"
+  // Notificaciones
+  notificarEntrada      Boolean  @default(true)
+  notificarSalida       Boolean  @default(true)
+  notificarGerente      Boolean  @default(false)
+  // Horarios activos
+  horariosActivos       String?  @db.Text // JSON con horarios de activación
+  diasActivos           String   @default("1,2,3,4,5,6,7") // Días de la semana activos
+  // Estado
+  activo                Boolean  @default(true)
+  creadoPor             String?  // ID del usuario que creó la zona
+  observaciones         String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  agencia               Agencia  @relation(fields: [agenciaId], references: [id], onDelete: Cascade)
+  configuraciones       ConfiguracionProximidad[]
+  grabaciones           GrabacionProximidad[]
+  logs                  LogProximidad[]
+
+  @@index([agenciaId])
+  @@index([activo])
+  @@map("zonas_proximidad")
+}
+
+// Configuración personalizada por vendedor
+model ConfiguracionProximidad {
+  id                    Int      @id @default(autoincrement())
+  vendedorId            String
+  zonaProximidadId      Int?     // null = configuración global del vendedor
+  // Configuración de activación
+  sistemaActivo         Boolean  @default(true)
+  modoFuncionamiento    String   @default("automatico") // "automatico", "manual", "pausado"
+  // Configuración de detección
+  precisonGPS           String   @default("alta") // "baja", "media", "alta"
+  intervaloDeteccion    Int      @default(30) // segundos entre verificaciones
+  // Configuración de grabación
+  inicioAutomatico      Boolean  @default(true)
+  confirmarAntes        Boolean  @default(false) // Pedir confirmación antes de grabar
+  grabarEnBackground    Boolean  @default(true) // Permitir grabación en background
+  notificacionesSonido  Boolean  @default(true)
+  notificacionesVibrar  Boolean  @default(true)
+  // Configuración de calidad
+  calidadAudio          String   @default("media") // "baja", "media", "alta"
+  compresionAudio       String   @default("media") // "baja", "media", "alta"
+  cancelarRuido         Boolean  @default(true)
+  // Configuración de privacidad
+  compartirUbicacion    Boolean  @default(true) // Compartir ubicación con gerente
+  almacenarUbicaciones  Boolean  @default(true) // Guardar histórico de ubicaciones
+  // Configuración de alertas
+  alertarGerente        Boolean  @default(false)
+  alertarEquipo         Boolean  @default(false)
+  // Configuración de horarios
+  horariosPersonalizados String? @db.Text // JSON con horarios específicos del vendedor
+  zonasExcluidas        String?  @db.Text // JSON con IDs de zonas excluidas
+  // Estado y metadata
+  activo                Boolean  @default(true)
+  ultimaConfiguracion   DateTime @default(now())
+  observaciones         String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  vendedor              User     @relation("ConfiguracionProximidadVendedor", fields: [vendedorId], references: [id], onDelete: Cascade)
+  zonaProximidad        ZonaProximidad? @relation(fields: [zonaProximidadId], references: [id])
+  grabaciones           GrabacionProximidad[]
+
+  @@unique([vendedorId, zonaProximidadId])
+  @@index([vendedorId])
+  @@map("configuraciones_proximidad")
+}
+
+// Grabaciones automáticas por proximidad (extiende el sistema existente)
+model GrabacionProximidad {
+  id                    Int      @id @default(autoincrement())
+  grabacionConversacionId Int?   // Referencia a la grabación principal (puede ser null si falló)
+  vendedorId            String
+  zonaProximidadId      Int
+  configuracionProximidadId Int?
+  prospectoId           Int?     // Prospecto asociado si existe
+  // Datos de detección de proximidad
+  ubicacionDetectada    String   @db.Text // JSON con coordenadas de detección
+  tiempoEnZona          Int?     // segundos que estuvo en la zona
+  horaEntrada           DateTime
+  horaSalida            DateTime?
+  // Estado de la grabación automática
+  estadoGrabacion       String   // "iniciada", "en_curso", "completada", "fallida", "cancelada"
+  tipoActivacion        String   // "automatica", "manual", "confirmacion"
+  motivoCancelacion     String?  // Razón si fue cancelada
+  // Configuración aplicada
+  configuracionAplicada String   @db.Text // JSON con configuración que se aplicó
+  calidadDetectada      String?  // Calidad final de la grabación
+  // Metadata de proximidad
+  distanciaPromedio     Decimal? @db.Decimal(8, 3) // metros promedio de distancia al centro
+  precisionGPS          Decimal? @db.Decimal(8, 3) // metros de precisión GPS
+  velocidadDetectada    Decimal? @db.Decimal(8, 3) // km/h velocidad promedio
+  // Análisis automático de contexto
+  contextoDetectado     String?  // "reunion", "test_drive", "entrega", "visita", "otro"
+  nivelRuidoAmbiente    String?  // "bajo", "medio", "alto"
+  tiempoSinActividad    Int?     // segundos sin actividad detectada
+  // Notificaciones enviadas
+  notificacionVendedor  Boolean  @default(false)
+  notificacionGerente   Boolean  @default(false)
+  fechaNotificacion     DateTime?
+  // Control de errores
+  erroresDeteccion      String?  @db.Text // JSON con errores durante la detección
+  intentosReactivacion  Int      @default(0)
+  // Metadata
+  dispositivoDeteccion  String?  // "android", "ios", "web"
+  versionApp            String?  // Versión de la app/navegador
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  vendedor              User     @relation("GrabacionProximidadVendedor", fields: [vendedorId], references: [id])
+  zonaProximidad        ZonaProximidad @relation(fields: [zonaProximidadId], references: [id])
+  configuracionProximidad ConfiguracionProximidad? @relation(fields: [configuracionProximidadId], references: [id])
+  prospecto             Prospecto? @relation("GrabacionProximidadProspecto", fields: [prospectoId], references: [id])
+  grabacionConversacion GrabacionConversacion? @relation("GrabacionConversacionProximidad", fields: [grabacionConversacionId], references: [id])
+
+  @@index([vendedorId])
+  @@index([zonaProximidadId])
+  @@index([horaEntrada])
+  @@index([estadoGrabacion])
+  @@map("grabaciones_proximidad")
+}
+
+// Log detallado de detecciones de proximidad
+model LogProximidad {
+  id                    Int      @id @default(autoincrement())
+  vendedorId            String
+  zonaProximidadId      Int?     // null si es detección fuera de zonas
+  tipoEvento            String   // "entrada_zona", "salida_zona", "deteccion_ubicacion", "error_gps", "grabacion_iniciada", "grabacion_finalizada"
+  // Datos de ubicación
+  latitud               Decimal? @db.Decimal(10, 8)
+  longitud              Decimal? @db.Decimal(11, 8)
+  precision             Decimal? @db.Decimal(8, 3) // metros
+  altitud               Decimal? @db.Decimal(8, 2) // metros
+  velocidad             Decimal? @db.Decimal(8, 3) // km/h
+  rumbo                 Decimal? @db.Decimal(6, 3) // grados
+  // Datos del evento
+  distanciaZona         Decimal? @db.Decimal(8, 3) // metros de distancia al centro de zona
+  tiempoEnZona          Int?     // segundos acumulados en la zona
+  confianzaDeteccion    Decimal? @db.Decimal(5, 2) // porcentaje de confianza
+  // Información del dispositivo
+  proveedor             String?  // "gps", "network", "passive"
+  tiempoAdquisicion     Int?     // millisegundos para obtener ubicación
+  nivelBateria          Int?     // porcentaje de batería
+  conectividad          String?  // "wifi", "mobile", "none"
+  // Contexto de la detección
+  enLlamada             Boolean  @default(false)
+  enGrabacion           Boolean  @default(false)
+  appEnForeground       Boolean  @default(true)
+  permisosConcedidos    String?  @db.Text // JSON con estado de permisos
+  // Metadata
+  timestamp             DateTime @default(now())
+  observaciones         String?  @db.Text
+  datosAdicionales      String?  @db.Text // JSON con datos extra para debug
+
+  vendedor              User     @relation("LogProximidadVendedor", fields: [vendedorId], references: [id])
+  zonaProximidad        ZonaProximidad? @relation(fields: [zonaProximidadId], references: [id])
+
+  @@index([vendedorId, timestamp])
+  @@index([zonaProximidadId, timestamp])
+  @@index([tipoEvento])
+  @@map("logs_proximidad")
+}
+
+// Métricas diarias de uso del sistema de proximidad
+model MetricasProximidad {
+  id                    Int      @id @default(autoincrement())
+  agenciaId             Int
+  fecha                 DateTime @db.Date
+  // Métricas de detección
+  totalDetecciones      Int      @default(0)
+  deteccionesExitosas   Int      @default(0)
+  erroresDeteccion      Int      @default(0)
+  zonasActivas          Int      @default(0) // Zonas que tuvieron actividad
+  // Métricas de grabación
+  grabacionesIniciadas  Int      @default(0)
+  grabacionesCompletadas Int     @default(0)
+  grabacionesFallidas   Int      @default(0)
+  grabacionesCanceladas Int      @default(0)
+  duracionPromedio      Decimal? @db.Decimal(8, 2) // minutos promedio
+  // Métricas de vendedores
+  vendedoresActivos     Int      @default(0) // Vendedores que usaron el sistema
+  tiempoPromedioZona    Decimal? @db.Decimal(8, 2) // minutos promedio en zonas
+  // Métricas de calidad
+  calidadPromedioGPS    Decimal? @db.Decimal(8, 3) // metros de precisión promedio
+  tiempoRespuestaPromedio Decimal? @db.Decimal(8, 3) // segundos promedio para detectar
+  // Métricas de sistema
+  notificacionesEnviadas Int     @default(0)
+  alertasGeneradas      Int      @default(0)
+  errorRate             Decimal? @db.Decimal(5, 2) // Porcentaje de errores
+  // Métricas de recursos
+  consumoBateria        Decimal? @db.Decimal(5, 2) // Porcentaje promedio consumido
+  usoAlmacenamiento     Decimal? @db.Decimal(10, 2) // MB usados
+  transferenciaDatos    Decimal? @db.Decimal(10, 2) // MB transferidos
+  createdAt             DateTime @default(now())
+
+  agencia               Agencia  @relation(fields: [agenciaId], references: [id], onDelete: Cascade)
+
+  @@unique([agenciaId, fecha])
+  @@index([fecha])
+  @@map("metricas_proximidad")
+}
+
+// ================== SISTEMA DE ROLE PLAY PARA ENTRENAMIENTOS ==================
+
+// Escenarios de Role Play para entrenamiento de ventas
+model RolePlayScenario {
+  id                    Int      @id @default(autoincrement())
+  titulo                String   // "Cliente indeciso que 'necesita pensarlo'"
+  descripcion           String   @db.Text // Descripción detallada del escenario
+  categoria             String   // "prospectacion", "objeciones", "cierre", "situaciones_dificiles"
+  nivelDificultad       String   @default("medio") // "principiante", "medio", "avanzado", "experto"
+  tipoCliente           String   // "indeciso", "precio_sensible", "tecnico", "impulsivo", "desconfiado"
+  personalidadCliente   String   @db.Text // JSON con características de personalidad del cliente IA
+  vehiculoInteres       String?  // Tipo de vehículo de interés
+  presupuestoCliente    Decimal? @db.Decimal(12, 2) // Presupuesto del cliente ficticio
+  objetivosAprendizaje  String   @db.Text // JSON con objetivos específicos de aprendizaje
+  objecionesComunes     String   @db.Text // JSON con objeciones que el cliente IA puede usar
+  contextoPreventa      String?  @db.Text // Contexto previo de la situación de venta
+  duracionEstimada      Int      @default(15) // minutos
+  pilaresEvaluados      String   @db.Text // JSON con IDs de pilares SPCC que evalúa este escenario
+  activo                Boolean  @default(true)
+  etiquetas             String?  @db.Text // JSON con tags para filtrado
+  dificultadPromedio    Decimal? @db.Decimal(3, 2) // Puntuación promedio de dificultad (1-10)
+  completadoVeces       Int      @default(0) // Contador de veces que se ha completado
+  puntuacionPromedio    Decimal? @db.Decimal(5, 2) // Puntuación promedio obtenida (0-100)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relaciones
+  sessions              RolePlaySession[] @relation("RolePlayScenarioSessions")
+  
+  @@index([categoria, nivelDificultad])
+  @@index([tipoCliente])
+  @@index([activo])
+  @@map("roleplay_scenarios")
+}
+
+// Sesiones de Role Play entre vendedor y IA
+model RolePlaySession {
+  id                    Int      @id @default(autoincrement())
+  vendedorId            String
+  scenarioId            Int
+  fechaInicio           DateTime @default(now())
+  fechaFin              DateTime?
+  duracionMinutos       Int?     // Duración real de la sesión
+  estadoSession         String   @default("iniciada") // "iniciada", "en_progreso", "completada", "abandonada"
+  conversacionCompleta  String?  @db.Text // JSON con el historial completo de mensajes
+  totalMensajes         Int      @default(0) // Contador de mensajes intercambiados
+  mensajesVendedor      Int      @default(0) // Mensajes enviados por el vendedor
+  mensajesClienteIA     Int      @default(0) // Respuestas del cliente IA
+  configuracionIA       String?  @db.Text // JSON con configuración específica de IA usada
+  modeloIAUtilizado     String?  // "gpt-4", "deepseek", etc.
+  costoIATotal          Decimal? @db.Decimal(8, 4) // Costo total en IA de la sesión
+  tokensTotales         Int      @default(0) // Total de tokens consumidos
+  tokensPrompt          Int      @default(0) // Tokens de prompt
+  tokensCompletion      Int      @default(0) // Tokens de completion
+  metadataSession       String?  @db.Text // JSON con metadatos adicionales
+  ipOrigen              String?  // IP desde donde se realizó la sesión
+  dispositivoUsado      String?  // "web", "mobile"
+  
+  // Campos para análisis
+  objetivoCumplido      Boolean  @default(false) // Si se cumplió el objetivo de aprendizaje
+  ventaLograda          Boolean  @default(false) // Si se logró cerrar la "venta"
+  clienteSatisfecho     Boolean  @default(false) // Evaluación del cliente IA
+  observacionesVendedor String?  @db.Text // Notas del vendedor post-sesión
+  
+  vendedor              User     @relation("RolePlaySessionsVendedor", fields: [vendedorId], references: [id])
+  scenario              RolePlayScenario @relation("RolePlayScenarioSessions", fields: [scenarioId], references: [id])
+  evaluations           RolePlayEvaluation[] @relation("RolePlaySessionEvaluations")
+  feedback              RolePlayFeedback[] @relation("RolePlaySessionFeedback")
+  
+  @@index([vendedorId, fechaInicio])
+  @@index([scenarioId])
+  @@index([estadoSession])
+  @@index([fechaInicio])
+  @@map("roleplay_sessions")
+}
+
+// Evaluaciones automáticas de las sesiones de Role Play
+model RolePlayEvaluation {
+  id                    Int      @id @default(autoincrement())
+  sessionId             Int
+  vendedorId            String
+  tipoEvaluacion        String   // "automatica_ia", "manual_gerente", "autoevaluacion"
+  puntuacionGeneral     Decimal  @db.Decimal(5, 2) // Puntuación general (0-100)
+  puntuacionesPilares   String   @db.Text // JSON con puntuaciones por pilar SPCC
+  fortalezasDetectadas  String   @db.Text // JSON con fortalezas identificadas
+  areasDeporMejora      String   @db.Text // JSON con áreas que necesitan mejora
+  tecnicasUtilizadas    String   @db.Text // JSON con técnicas de venta utilizadas
+  objecionesManejadas   String   @db.Text // JSON con objeciones manejadas correctamente
+  objecionesFallidas    String   @db.Text // JSON con objeciones mal manejadas
+  tiempoRespuestaPromedio Decimal? @db.Decimal(8, 3) // segundos promedio de respuesta
+  calidadPreguntas      Decimal? @db.Decimal(3, 2) // Calidad de las preguntas (1-10)
+  escuchActiva          Decimal? @db.Decimal(3, 2) // Nivel de escucha activa (1-10)
+  cierreEfectivo        Decimal? @db.Decimal(3, 2) // Efectividad en el cierre (1-10)
+  rapportCliente        Decimal? @db.Decimal(3, 2) // Construcción de rapport (1-10)
+  manejoObjeciones      Decimal? @db.Decimal(3, 2) // Manejo de objeciones (1-10)
+  conocimientoProducto  Decimal? @db.Decimal(3, 2) // Conocimiento del producto (1-10)
+  adaptabilidad         Decimal? @db.Decimal(3, 2) // Adaptabilidad al cliente (1-10)
+  profesionalismo       Decimal? @db.Decimal(3, 2) // Profesionalismo mostrado (1-10)
+  analisisIA            String?  @db.Text // JSON con análisis detallado de IA
+  recomendacionesIA     String?  @db.Text // JSON con recomendaciones específicas
+  puntuacionAntesVsDespues String? @db.Text // JSON comparando con evaluaciones previas
+  mejoraDetectada       Boolean  @default(false) // Si se detectó mejora vs sesiones anteriores
+  fechaEvaluacion       DateTime @default(now())
+  modeloIAEvaluador     String?  // Modelo de IA que hizo la evaluación
+  costoEvaluacion       Decimal? @db.Decimal(8, 4) // Costo de la evaluación IA
+  
+  session               RolePlaySession @relation("RolePlaySessionEvaluations", fields: [sessionId], references: [id])
+  vendedor              User     @relation("RolePlayEvaluationsVendedor", fields: [vendedorId], references: [id])
+  
+  @@index([vendedorId, fechaEvaluacion])
+  @@index([sessionId])
+  @@index([puntuacionGeneral])
+  @@map("roleplay_evaluations")
+}
+
+// Progreso y métricas de Role Play por vendedor
+model RolePlayProgress {
+  id                      Int      @id @default(autoincrement())
+  vendedorId              String
+  mes                     Int
+  año                     Int
+  totalSesiones           Int      @default(0)
+  totalMinutosEntrenados  Int      @default(0) // Total de minutos practicando
+  sesionesCompletadas     Int      @default(0)
+  sesionesAbandonadas     Int      @default(0)
+  promedioCompletitud     Decimal? @db.Decimal(5, 2) // Porcentaje promedio de completitud
+  puntuacionPromedio      Decimal? @db.Decimal(5, 2) // Puntuación promedio obtenida
+  puntuacionMejor         Decimal? @db.Decimal(5, 2) // Mejor puntuación obtenida
+  puntuacionUltimaSemana  Decimal? @db.Decimal(5, 2) // Promedio de la última semana
+  mejoraGeneral           Decimal? @db.Decimal(5, 2) // Mejora % vs mes anterior
+  escenariosFuertes       String?  @db.Text // JSON con escenarios donde destaca
+  escenariosDebiles       String?  @db.Text // JSON con escenarios que necesita mejorar
+  pilaresFortaleza        String?  @db.Text // JSON con pilares SPCC fuertes
+  pilaresOportunidad      String?  @db.Text // JSON con pilares SPCC a mejorar
+  objetivosLogrados       Int      @default(0) // Objetivos de aprendizaje cumplidos
+  ventasSimuladas         Int      @default(0) // Número de "ventas" cerradas en simulaciones
+  tasaExitoSimulaciones   Decimal? @db.Decimal(5, 2) // % de éxito cerrando simulaciones
+  tiempoPromedioSesion    Decimal? @db.Decimal(8, 3) // Minutos promedio por sesión
+  consistenciaEntrenamientos Decimal? @db.Decimal(5, 2) // Consistencia en entrenamientos
+  nivelActual             String   @default("principiante") // "principiante", "medio", "avanzado", "experto"
+  puntosGameficacion      Int      @default(0) // Puntos de gamificación acumulados
+  badgesObtenidos         String?  @db.Text // JSON con badges/logros obtenidos
+  rachaActual             Int      @default(0) // Días consecutivos entrenando
+  rachaMejor              Int      @default(0) // Mejor racha conseguida
+  ultimaActividad         DateTime?
+  metasSesiones           Int      @default(5) // Meta de sesiones por mes
+  metasMinutos            Int      @default(150) // Meta de minutos por mes
+  fechaCalculado          DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  
+  vendedor                User     @relation("RolePlayProgressVendedor", fields: [vendedorId], references: [id])
+  
+  @@unique([vendedorId, mes, año])
+  @@index([vendedorId])
+  @@index([puntuacionPromedio])
+  @@index([nivelActual])
+  @@map("roleplay_progress")
+}
+
+// Feedback detallado y sugerencias de mejora
+model RolePlayFeedback {
+  id                    Int      @id @default(autoincrement())
+  sessionId             Int
+  vendedorId            String
+  tipoFeedback          String   // "positivo", "constructivo", "corrective", "sugerencia"
+  categoria             String   // "tecnicas_cierre", "manejo_objeciones", "rapport", "conocimiento_producto"
+  momentoSession        String   // "inicio", "desarrollo", "cierre", "general"
+  feedbackTexto         String   @db.Text // Texto del feedback específico
+  sugerenciaMejora      String?  @db.Text // Sugerencia específica de mejora
+  ejemploMejorado       String?  @db.Text // Ejemplo de cómo podría haberse manejado mejor
+  recursosRecomendados  String?  @db.Text // JSON con recursos de entrenamiento recomendados
+  pilarSPCCRelacionado  Int?     // ID del pilar SPCC al que se refiere
+  prioridad             String   @default("media") // "baja", "media", "alta", "critica"
+  implementado          Boolean  @default(false) // Si el vendedor implementó la sugerencia
+  utilidad              Int?     // Calificación de utilidad del feedback (1-5)
+  fechaImplementacion   DateTime?
+  notasImplementacion   String?  @db.Text // Notas del vendedor sobre implementación
+  feedbackGeneradoPor   String   // "ia_automatica", "gerente", "autoanalsisis"
+  modeloIAUsado         String?  // Si fue generado por IA
+  costoGeneracion       Decimal? @db.Decimal(8, 4) // Costo de generar el feedback
+  fechaCreacion         DateTime @default(now())
+  fechaVisto            DateTime? // Cuándo fue visto por el vendedor
+  fechaArchivado        DateTime? // Cuándo fue archivado/resuelto
+  estadoFeedback        String   @default("nuevo") // "nuevo", "visto", "en_proceso", "implementado", "archivado"
+  
+  session               RolePlaySession @relation("RolePlaySessionFeedback", fields: [sessionId], references: [id])
+  vendedor              User     @relation("RolePlayFeedbackVendedor", fields: [vendedorId], references: [id])
+  
+  @@index([vendedorId, fechaCreacion])
+  @@index([sessionId])
+  @@index([categoria, prioridad])
+  @@index([estadoFeedback])
+  @@map("roleplay_feedback")
+}
+
+// Configuración del sistema de Role Play por agencia
+model RolePlayConfiguration {
+  id                    Int      @id @default(autoincrement())
+  agenciaId             Int?     // Null para configuración global
+  habilitado            Boolean  @default(true)
+  sesionesMaximasPorDia Int      @default(10) // Límite de sesiones por vendedor por día
+  duracionMaximaSesion  Int      @default(30) // Minutos máximos por sesión
+  nivelMinimoDificultad String   @default("principiante") // Nivel mínimo permitido
+  evaluacionAutomatica  Boolean  @default(true) // Si se evalúa automáticamente
+  feedbackTiempoReal    Boolean  @default(true) // Feedback durante la sesión
+  gamificacionHabilitada Boolean @default(true) // Sistema de puntos y badges
+  costoPorSesion        Decimal  @default(0.25) @db.Decimal(8, 4) // Costo por sesión en IA
+  limiteCostosAlerta    Decimal  @default(50.00) @db.Decimal(10, 2) // Alerta cuando se supere
+  proveedorIAPreferido  String   @default("openai") // Proveedor de IA preferido
+  modeloIAEvaluacion    String   @default("gpt-4o-mini") // Modelo para evaluación
+  modeloIAConversacion  String   @default("gpt-4o-mini") // Modelo para conversación
+  promptsPersonalizados String?  @db.Text // JSON con prompts personalizados por agencia
+  restriccionesHorario  String?  @db.Text // JSON con horarios permitidos
+  configuracionAvanzada String?  @db.Text // JSON con configuración adicional
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@unique([agenciaId])
+  @@map("roleplay_configurations")
 }

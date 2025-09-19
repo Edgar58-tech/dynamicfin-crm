@@ -32,7 +32,8 @@ import {
   Store,
   UserPlus,
   AlertCircle,
-  LineChart
+  LineChart,
+  Brain
 } from 'lucide-react';
 import { TipoRol } from '@prisma/client';
 
@@ -128,6 +129,19 @@ export function Sidebar() {
         icon: GraduationCap,
         roles: ['GERENTE_VENTAS'],
       },
+    ] : []),
+
+    // SECCIÓN ENTRENAMIENTO ROLE PLAY
+    {
+      title: '🎭 Role Play IA',
+      href: '/dashboard/roleplay',
+      icon: Brain,
+      roles: ['VENDEDOR', 'GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_MARCA', 'DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'],
+      featured: true,
+    },
+
+    // Continuación sección gerencial
+    ...(session?.user?.rol === 'GERENTE_VENTAS' ? [
       {
         title: '🔮 Forecasting',
         href: '/dashboard/gerente/forecasting',
