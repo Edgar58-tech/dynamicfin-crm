@@ -123,6 +123,11 @@ Responde SOLO como el cliente, no rompas el personaje.
       }
     });
 
+    // Verificar que tenemos la API key
+    if (!process.env.ABACUSAI_API_KEY) {
+      throw new Error('ABACUSAI_API_KEY no está configurada');
+    }
+
     // Llamar a la API de streaming
     const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
       method: 'POST',
@@ -140,7 +145,9 @@ Responde SOLO como el cliente, no rompas el personaje.
     });
 
     if (!response.ok) {
-      throw new Error(`Error en API: ${response.status}`);
+      const errorText = await response.text();
+      console.error('AbacusAI API Error:', response.status, errorText);
+      throw new Error(`Error en API AbacusAI: ${response.status} - ${errorText}`);
     }
 
     const stream = new ReadableStream({
@@ -149,48 +156,27 @@ Responde SOLO como el cliente, no rompas el personaje.
         const decoder = new TextDecoder();
         const encoder = new TextEncoder();
         let buffer = '';
+        let streamEnded = false;
 
         try {
           while (true) {
             const { done, value } = await reader?.read() || {};
-            if (done) break;
+            if (done) {
+              // Si el stream terminó sin [DONE], procesar lo que tenemos
+              if (!streamEnded && buffer.trim()) {
+                await finalizeResponse();
+              }
+              break;
+            }
 
             const chunk = decoder.decode(value);
             const lines = chunk.split('\n');
 
             for (const line of lines) {
               if (line.startsWith('data: ')) {
-                const data = line.slice(6);
+                const data = line.slice(6).trim();
                 if (data === '[DONE]') {
-                  // Finalizar y guardar la respuesta completa
-                  const respuestaCompleta = buffer;
-                  
-                  historialConversacion.push({
-                    role: 'assistant',
-                    content: respuestaCompleta,
-                    timestamp: new Date().toISOString(),
-                    sender: 'cliente_ia'
-                  });
-
-                  // Actualizar sesión en base de datos
-                  await prisma.rolePlaySession.update({
-                    where: { id: rolePlaySession.id },
-                    data: {
-                      conversacionCompleta: JSON.stringify(historialConversacion),
-                      totalMensajes: historialConversacion.length,
-                      mensajesVendedor: historialConversacion.filter((m: any) => m.sender === 'vendedor').length,
-                      mensajesClienteIA: historialConversacion.filter((m: any) => m.sender === 'cliente_ia').length,
-                      estadoSession: 'en_progreso'
-                    }
-                  });
-
-                  const finalData = JSON.stringify({
-                    status: 'completed',
-                    sessionId: rolePlaySession.id,
-                    response: respuestaCompleta,
-                    totalMessages: historialConversacion.length
-                  });
-                  controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
+                  await finalizeResponse();
                   return;
                 }
                 
@@ -202,23 +188,70 @@ Responde SOLO como el cliente, no rompas el personaje.
                     const progressData = JSON.stringify({
                       status: 'streaming',
                       content: content,
-                      sessionId: rolePlaySession.id
+                      sessionId: rolePlaySession.id,
+                      totalContent: buffer
                     });
                     controller.enqueue(encoder.encode(`data: ${progressData}\n\n`));
                   }
                 } catch (e) {
-                  // Ignorar errores de parsing JSON
+                  // Ignorar errores de parsing JSON menores
+                  if (data && data !== '') {
+                    console.warn('Error parsing streaming JSON:', data, e);
+                  }
                 }
               }
             }
           }
+
+          async function finalizeResponse() {
+            if (streamEnded) return;
+            streamEnded = true;
+
+            const respuestaCompleta = buffer.trim();
+            
+            if (!respuestaCompleta) {
+              throw new Error('No se recibió respuesta de la IA');
+            }
+            
+            historialConversacion.push({
+              role: 'assistant',
+              content: respuestaCompleta,
+              timestamp: new Date().toISOString(),
+              sender: 'cliente_ia'
+            });
+
+            // Actualizar sesión en base de datos
+            await prisma.rolePlaySession.update({
+              where: { id: rolePlaySession.id },
+              data: {
+                conversacionCompleta: JSON.stringify(historialConversacion),
+                totalMensajes: historialConversacion.length,
+                mensajesVendedor: historialConversacion.filter((m: any) => m.sender === 'vendedor').length,
+                mensajesClienteIA: historialConversacion.filter((m: any) => m.sender === 'cliente_ia').length,
+                estadoSession: 'en_progreso'
+              }
+            });
+
+            const finalData = JSON.stringify({
+              status: 'completed',
+              sessionId: rolePlaySession.id,
+              response: respuestaCompleta,
+              totalMessages: historialConversacion.length
+            });
+            controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
+            controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+          }
+
         } catch (error) {
           console.error('Stream error:', error);
           const errorData = JSON.stringify({
             status: 'error',
-            message: 'Error en el streaming'
+            message: 'Error en el streaming de la IA',
+            error: error.message,
+            sessionId: rolePlaySession.id
           });
           controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
         } finally {
           controller.close();
         }

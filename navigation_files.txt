@@ -1,0 +1,6 @@
+./navigation_files.txt
+./components/dashboard/sidebar.tsx
+./components/ui/context-menu.tsx
+./components/ui/dropdown-menu.tsx
+./components/ui/menubar.tsx
+./components/ui/navigation-menu.tsx
