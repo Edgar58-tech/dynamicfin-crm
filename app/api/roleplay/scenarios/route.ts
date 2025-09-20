@@ -207,15 +207,16 @@ export async function PUT(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error updating scenario:', error);
-    if (error.code === 'P2025') {
-      return NextResponse.json({ error: 'Escenario no encontrado' }, { status: 404 });
-    }
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
+  console.error('Error updating scenario:', error);
+  // Verificamos si 'error' es un objeto y tiene la propiedad 'code'
+  if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2025') {
+    return NextResponse.json({ error: 'Escenario no encontrado' }, { status: 404 });
   }
+  return NextResponse.json(
+    { error: 'Error interno del servidor' },
+    { status: 500 }
+  );
+}
 }
 
 export async function DELETE(request: NextRequest) {
@@ -245,15 +246,15 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({
       message: 'Escenario eliminado exitosamente'
     });
-
-  } catch (error) {
-    console.error('Error deleting scenario:', error);
-    if (error.code === 'P2025') {
-      return NextResponse.json({ error: 'Escenario no encontrado' }, { status: 404 });
-    }
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
+} catch (error) {
+  console.error('Error deleting scenario:', error);
+  // Verificamos si 'error' es un objeto y tiene la propiedad 'code'
+  if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2025') {
+    return NextResponse.json({ error: 'Escenario no encontrado' }, { status: 404 });
   }
+  return NextResponse.json(
+    { error: 'Error interno del servidor' },
+    { status: 500 }
+  );
+}
 }

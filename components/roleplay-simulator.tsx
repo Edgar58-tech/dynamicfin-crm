@@ -1,6 +1,6 @@
 
 'use client';
-
+import { RolePlayScenario as Scenario } from '@prisma/client';
 import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,21 +36,9 @@ interface Message {
   timestamp: string;
 }
 
-interface Scenario {
-  id: number;
-  titulo: string;
-  descripcion: string;
-  categoria: string;
-  nivelDificultad: string;
-  tipoCliente: string;
-  vehiculoInteres?: string;
-  presupuestoCliente?: number;
-  duracionEstimada: number;
-  objetivosAprendizaje?: string[];
-}
 
 interface RolePlaySimulatorProps {
-  scenario?: Scenario;
+  scenario: Scenario | undefined;
   onComplete?: (sessionData: any) => void;
   onEvaluate?: (sessionId: number) => void;
 }

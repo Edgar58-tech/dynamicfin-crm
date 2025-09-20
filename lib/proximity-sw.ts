@@ -235,8 +235,7 @@ export const proximityServiceWorker = new ProximityServiceWorker();
  */
 export function useProximityServiceWorker() {
   const [isRegistered, setIsRegistered] = React?.useState ? React.useState(false) : [false, () => {}];
-  const [status, setStatus] = React?.useState ? React.useState<ProximityServiceWorkerStatus | null>(null) : [null, () => {}];
-
+  const [status, setStatus]: [ProximityServiceWorkerStatus | null, Function] = React?.useState ? React.useState(null) : [null, () => {}];
   React?.useEffect?.(() => {
     // Registrar service worker
     const registerSW = async () => {

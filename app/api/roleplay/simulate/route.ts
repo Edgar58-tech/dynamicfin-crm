@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { RolePlaySession } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Escenario no encontrado' }, { status: 404 });
     }
 
-    let rolePlaySession;
+    let rolePlaySession: RolePlaySession | null;
     
     // Si no hay sessionId, crear nueva sesión
     if (!sessionId) {
@@ -172,21 +173,22 @@ Responde SOLO como el cliente, no rompas el personaje.
                     sender: 'cliente_ia'
                   });
 
-                  // Actualizar sesión en base de datos
-                  await prisma.rolePlaySession.update({
-                    where: { id: rolePlaySession.id },
-                    data: {
-                      conversacionCompleta: JSON.stringify(historialConversacion),
-                      totalMensajes: historialConversacion.length,
-                      mensajesVendedor: historialConversacion.filter((m: any) => m.sender === 'vendedor').length,
-                      mensajesClienteIA: historialConversacion.filter((m: any) => m.sender === 'cliente_ia').length,
-                      estadoSession: 'en_progreso'
-                    }
-                  });
-
+// Actualizar sesión en base de datos
+if (rolePlaySession) { // <-- Tu comprobación de seguridad (CORRECTO)
+  await prisma.rolePlaySession.update({
+    where: { id: rolePlaySession.id },
+    data: { // <-- Todos los campos del bloque original (COMPLETO)
+      conversacionCompleta: JSON.stringify(historialConversacion),
+      totalMensajes: historialConversacion.length,
+      mensajesVendedor: historialConversacion.filter((m: any) => m.sender === 'vendedor').length,
+      mensajesClienteIA: historialConversacion.filter((m: any) => m.sender === 'cliente_ia').length,
+      estadoSession: 'en_progreso'
+    }
+  });
+}
                   const finalData = JSON.stringify({
                     status: 'completed',
-                    sessionId: rolePlaySession.id,
+                    sessionId: rolePlaySession?.id,
                     response: respuestaCompleta,
                     totalMessages: historialConversacion.length
                   });
@@ -202,7 +204,7 @@ Responde SOLO como el cliente, no rompas el personaje.
                     const progressData = JSON.stringify({
                       status: 'streaming',
                       content: content,
-                      sessionId: rolePlaySession.id
+                      sessionId: rolePlaySession?.id
                     });
                     controller.enqueue(encoder.encode(`data: ${progressData}\n\n`));
                   }
@@ -302,11 +304,16 @@ export async function PUT(request: NextRequest) {
       }
     });
 
-  } catch (error) {
-    console.error('Error finalizing session:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
+} catch (error) {
+  // Patrón de manejo de errores robusto
+  let errorMessage = 'Error interno del servidor';
+  if (error instanceof Error) {
+    errorMessage = error.message;
   }
+  console.error('Error finalizing session:', error);
+  return NextResponse.json(
+    { error: errorMessage },
+    { status: 500 }
+  );
+}
 }

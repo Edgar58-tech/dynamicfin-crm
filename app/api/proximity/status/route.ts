@@ -1,5 +1,3 @@
-
-
 /**
  * API para estado y monitoreo del sistema de proximidad
  * Proporciona información en tiempo real del sistema y estadísticas
@@ -9,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { ZonaProximidad } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -57,8 +57,9 @@ export async function GET(request: NextRequest) {
         },
       }),
 
-      // Vendedores con sistema activo
-      prisma.configuracionProximidad.count({
+      // Vendedores con sistema activo (CORREGIDO)
+      prisma.configuracionProximidad.groupBy({
+        by: ['vendedorId'],
         where: {
           sistemaActivo: true,
           activo: true,
@@ -66,7 +67,6 @@ export async function GET(request: NextRequest) {
             agenciaId: session.user.agenciaId,
           },
         },
-        distinct: ['vendedorId'],
       }),
 
       // Grabaciones activas ahora
@@ -109,11 +109,14 @@ export async function GET(request: NextRequest) {
 
     const [
       zonasActivas,
-      vendedoresActivos,
+      vendedoresActivosResult, // Esto es ahora un array de resultados de groupBy
       grabacionesActivas,
       grabacionesHoy,
       grabacionesAyer,
     ] = estadoGeneral;
+
+    // Obtenemos la cuenta de la longitud del array de groupBy (CORREGIDO)
+    const vendedoresActivos = vendedoresActivosResult.length;
 
     let estadoVendedor = null;
     if (vendedorId || session.user.rol === 'VENDEDOR') {
@@ -382,8 +385,7 @@ export async function POST(request: NextRequest) {
         const dLon = (zona.longitud.toNumber() - parseFloat(longitud)) * Math.PI / 180;
         const a = 
           Math.sin(dLat/2) * Math.sin(dLat/2) +
-          Math.cos(parseFloat(latitud) * Math.PI / 180) * Math.cos(zona.latitud.toNumber() * Math.PI / 180) * 
-          Math.sin(dLon/2) * Math.sin(dLon/2);
+          Math.cos(parseFloat(latitud) * Math.PI / 180) * Math.cos(zona.latitud.toNumber() * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         distanciaZona = R * c;
       }

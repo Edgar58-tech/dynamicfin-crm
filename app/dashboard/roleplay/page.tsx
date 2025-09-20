@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RolePlayScenario as Scenario } from '@prisma/client';
+
 import { 
   PlayCircle, 
   BookOpen, 
@@ -60,7 +62,7 @@ interface RecentSession {
 export default function RolePlayPage() {
   const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState('simulador');
-  const [selectedScenario, setSelectedScenario] = useState(null);
+  const [selectedScenario, setSelectedScenario] = useState<Scenario | undefined>(undefined);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,7 +120,7 @@ export default function RolePlayPage() {
 
   const handleViewEvaluation = (sessionId: number) => {
     // Aquí podrías navegar a una página de evaluación detallada
-    toast.info('Abriendo evaluación detallada...');
+    toast.success('Abriendo evaluación detallada...');
   };
 
   const getNivelColor = (nivel: string) => {
@@ -559,7 +561,7 @@ export default function RolePlayPage() {
                   onClick={() => {
                     // Seleccionar escenario aleatorio para práctica rápida
                     setActiveTab('simulador');
-                    toast.info('Cargando escenario de práctica rápida...');
+                    toast('Cargando escenario de práctica rápida...');
                   }}
                   className="w-full justify-start gap-2"
                   variant="outline"
@@ -571,7 +573,7 @@ export default function RolePlayPage() {
                 <Button
                   onClick={() => {
                     // Ir a feedback pendiente
-                    toast.info('Revisando feedback pendiente...');
+                    toast.success('Revisando feedback pendiente...');
                   }}
                   className="w-full justify-start gap-2"
                   variant="outline"
