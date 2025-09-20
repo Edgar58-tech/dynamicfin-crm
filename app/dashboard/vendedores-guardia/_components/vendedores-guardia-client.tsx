@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Users,
   UserCheck,
@@ -23,9 +24,16 @@ import {
   RefreshCw,
   BarChart3,
   TrendingUp,
-  Bell
+  Bell,
+  Upload,
+  CalendarDays,
+  UserX,
+  FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { DragDropGuardias } from './drag-drop-guardias';
+import { CalendarioGuardias } from './calendario-guardias';
+import { CubrirGuardiaModal } from './cubrir-guardia-modal';
 
 interface VendedorInfo {
   id: string;
@@ -69,6 +77,11 @@ export function VendedoresGuardiaClient() {
   // Estados para configuración
   const [horaInicio, setHoraInicio] = useState('09:00');
   const [horaFin, setHoraFin] = useState('18:00');
+
+  // Estados para nuevas funcionalidades
+  const [tabActiva, setTabActiva] = useState('gestion');
+  const [modalCubrirAbierto, setModalCubrirAbierto] = useState(false);
+  const [vendedorACubrir, setVendedorACubrir] = useState<VendedorGuardia | null>(null);
 
   // Cargar datos de vendedores de guardia
   const cargarVendedoresGuardia = useCallback(async () => {
@@ -182,6 +195,62 @@ export function VendedoresGuardiaClient() {
     }
   };
 
+  // Manejar datos importados desde drag & drop
+  const manejarDatosImportados = async (datos: any[]) => {
+    try {
+      setGuardando(true);
+      
+      // Procesar cada registro importado
+      for (const dato of datos) {
+        const response = await fetch('/api/vendedores-guardia/importar', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            nombreVendedor: dato.nombreVendedor,
+            fechaGuardia: dato.fechaGuardia,
+            horaEntrada: dato.horaEntrada,
+            horaSalida: dato.horaSalida,
+            observaciones: dato.observaciones
+          })
+        });
+
+        if (!response.ok) {
+          console.warn(`Error importando ${dato.nombreVendedor}:`, await response.text());
+        }
+      }
+
+      toast.success(`${datos.length} guardias importadas exitosamente`);
+      await cargarVendedoresGuardia();
+      
+    } catch (error) {
+      console.error('Error importando datos:', error);
+      toast.error('Error al importar algunos datos');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // Abrir modal para cubrir guardia
+  const abrirModalCubrir = (vendedorGuardia: VendedorGuardia) => {
+    setVendedorACubrir(vendedorGuardia);
+    setModalCubrirAbierto(true);
+  };
+
+  // Manejar cobertura de guardia completada
+  const manejarGuardiaCubierta = () => {
+    cargarVendedoresGuardia();
+    setModalCubrirAbierto(false);
+    setVendedorACubrir(null);
+  };
+
+  // Manejar selección de fecha desde calendario
+  const manejarFechaSeleccionada = (fecha: Date) => {
+    setFechaSeleccionada(fecha.toISOString().split('T')[0]);
+    setTabActiva('gestion');
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -199,32 +268,55 @@ export function VendedoresGuardiaClient() {
 
   return (
     <div className="space-y-6">
-      {/* Panel de Control */}
-      <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
-        <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Calendar className="h-6 w-6" />
-              <div>
-                <CardTitle className="text-xl">Panel de Control de Guardia</CardTitle>
-                <CardDescription className="text-blue-100">
-                  Gestione los vendedores de guardia diarios
-                </CardDescription>
+      {/* Tabs de Navegación */}
+      <Tabs value={tabActiva} onValueChange={setTabActiva} className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="gestion" className="flex items-center space-x-2">
+            <Users className="h-4 w-4" />
+            <span>Gestión Diaria</span>
+          </TabsTrigger>
+          <TabsTrigger value="importar" className="flex items-center space-x-2">
+            <Upload className="h-4 w-4" />
+            <span>Importar Datos</span>
+          </TabsTrigger>
+          <TabsTrigger value="calendario" className="flex items-center space-x-2">
+            <CalendarDays className="h-4 w-4" />
+            <span>Calendario</span>
+          </TabsTrigger>
+          <TabsTrigger value="reportes" className="flex items-center space-x-2">
+            <BarChart3 className="h-4 w-4" />
+            <span>Reportes</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Tab de Gestión Diaria */}
+        <TabsContent value="gestion" className="space-y-6">
+          {/* Panel de Control */}
+          <Card className="shadow-lg border-0 bg-white/80 backdrop-blur">
+            <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Calendar className="h-6 w-6" />
+                  <div>
+                    <CardTitle className="text-xl">Panel de Control de Guardia</CardTitle>
+                    <CardDescription className="text-blue-100">
+                      Gestione los vendedores de guardia diarios
+                    </CardDescription>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={cargarVendedoresGuardia}
+                    disabled={loading}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                    Actualizar
+                  </Button>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={cargarVendedoresGuardia}
-                disabled={loading}
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Actualizar
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
+            </CardHeader>
 
         <CardContent className="p-6">
           {/* Selector de Fecha */}
@@ -374,143 +466,207 @@ export function VendedoresGuardiaClient() {
         </CardContent>
       </Card>
 
-      {/* Lista de Vendedores */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Vendedores Disponibles */}
-        <Card className="shadow-lg border-0">
-          <CardHeader className="bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-t-lg">
-            <CardTitle className="flex items-center">
-              <Users className="h-5 w-5 mr-2" />
-              Vendedores Disponibles ({vendedoresDisponibles.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="max-h-96 overflow-y-auto">
-              {vendedoresDisponibles.map((vendedor, index) => (
-                <motion.div
-                  key={vendedor.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className={`p-4 border-b cursor-pointer transition-colors hover:bg-gray-50 ${
-                    vendedoresSeleccionados.includes(vendedor.id) ? 'bg-blue-50 border-blue-200' : ''
-                  }`}
-                  onClick={() => toggleVendedor(vendedor.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                        vendedoresSeleccionados.includes(vendedor.id)
-                          ? 'bg-blue-600 border-blue-600'
-                          : 'border-gray-300'
-                      }`}>
-                        {vendedoresSeleccionados.includes(vendedor.id) && (
-                          <CheckCircle className="h-3 w-3 text-white" />
+          {/* Lista de Vendedores */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Vendedores Disponibles */}
+            <Card className="shadow-lg border-0">
+              <CardHeader className="bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-t-lg">
+                <CardTitle className="flex items-center">
+                  <Users className="h-5 w-5 mr-2" />
+                  Vendedores Disponibles ({vendedoresDisponibles.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-96 overflow-y-auto">
+                  {vendedoresDisponibles.map((vendedor, index) => (
+                    <motion.div
+                      key={vendedor.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className={`p-4 border-b cursor-pointer transition-colors hover:bg-gray-50 ${
+                        vendedoresSeleccionados.includes(vendedor.id) ? 'bg-blue-50 border-blue-200' : ''
+                      }`}
+                      onClick={() => toggleVendedor(vendedor.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                            vendedoresSeleccionados.includes(vendedor.id)
+                              ? 'bg-blue-600 border-blue-600'
+                              : 'border-gray-300'
+                          }`}>
+                            {vendedoresSeleccionados.includes(vendedor.id) && (
+                              <CheckCircle className="h-3 w-3 text-white" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {vendedor.nombre} {vendedor.apellido}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Carga actual: {vendedor.cargaProspectos} leads
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {vendedor.cargaProspectos > 0 && (
+                          <div className="flex items-center space-x-2">
+                            <Progress 
+                              value={Math.min((vendedor.cargaProspectos / 10) * 100, 100)} 
+                              className="w-16 h-2"
+                            />
+                            <Badge variant={vendedor.cargaProspectos > 8 ? 'destructive' : vendedor.cargaProspectos > 5 ? 'default' : 'secondary'}>
+                              {vendedor.cargaProspectos}
+                            </Badge>
+                          </div>
                         )}
                       </div>
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {vendedor.nombre} {vendedor.apellido}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          Carga actual: {vendedor.cargaProspectos} leads
-                        </div>
-                      </div>
+                    </motion.div>
+                  ))}
+                  
+                  {vendedoresDisponibles.length === 0 && (
+                    <div className="p-8 text-center text-gray-500">
+                      <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No hay vendedores disponibles</p>
                     </div>
-                    
-                    {vendedor.cargaProspectos > 0 && (
-                      <div className="flex items-center space-x-2">
-                        <Progress 
-                          value={Math.min((vendedor.cargaProspectos / 10) * 100, 100)} 
-                          className="w-16 h-2"
-                        />
-                        <Badge variant={vendedor.cargaProspectos > 8 ? 'destructive' : vendedor.cargaProspectos > 5 ? 'default' : 'secondary'}>
-                          {vendedor.cargaProspectos}
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-              
-              {vendedoresDisponibles.length === 0 && (
-                <div className="p-8 text-center text-gray-500">
-                  <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No hay vendedores disponibles</p>
+                  )}
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* Vendedores de Guardia Actuales */}
-        <Card className="shadow-lg border-0">
-          <CardHeader className="bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-t-lg">
-            <CardTitle className="flex items-center">
-              <UserCheck className="h-5 w-5 mr-2" />
-              Vendedores de Guardia ({vendedoresGuardia.filter(vg => vg.activo).length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="max-h-96 overflow-y-auto">
-              {vendedoresGuardia
-                .filter(vg => vg.activo)
-                .map((vendedorGuardia, index) => (
-                  <motion.div
-                    key={vendedorGuardia.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="p-4 border-b bg-green-50"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-5 h-5 bg-green-600 rounded flex items-center justify-center">
-                          <CheckCircle className="h-3 w-3 text-white" />
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {vendedorGuardia.vendedor.nombre} {vendedorGuardia.vendedor.apellido}
+            {/* Vendedores de Guardia Actuales */}
+            <Card className="shadow-lg border-0">
+              <CardHeader className="bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-t-lg">
+                <CardTitle className="flex items-center">
+                  <UserCheck className="h-5 w-5 mr-2" />
+                  Vendedores de Guardia ({vendedoresGuardia.filter(vg => vg.activo).length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-96 overflow-y-auto">
+                  {vendedoresGuardia
+                    .filter(vg => vg.activo)
+                    .map((vendedorGuardia, index) => (
+                      <motion.div
+                        key={vendedorGuardia.id}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="p-4 border-b bg-green-50"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-5 h-5 bg-green-600 rounded flex items-center justify-center">
+                              <CheckCircle className="h-3 w-3 text-white" />
+                            </div>
+                            <div>
+                              <div className="font-medium text-gray-900">
+                                {vendedorGuardia.vendedor.nombre} {vendedorGuardia.vendedor.apellido}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {vendedorGuardia.horaInicio} - {vendedorGuardia.horaFin}
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-sm text-gray-500">
-                            {vendedorGuardia.horaInicio} - {vendedorGuardia.horaFin}
+                          
+                          <div className="flex items-center space-x-2">
+                            <div className="text-right">
+                              <div className="flex items-center space-x-2">
+                                <Badge variant="outline" className="bg-white">
+                                  <Target className="h-3 w-3 mr-1" />
+                                  {vendedorGuardia.cargaActual}/{vendedorGuardia.metaDelDia}
+                                </Badge>
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {vendedorGuardia.metaDelDia > 0 
+                                  ? Math.round((vendedorGuardia.cargaActual / vendedorGuardia.metaDelDia) * 100)
+                                  : 0}% completado
+                              </div>
+                            </div>
+                            
+                            {/* Botón para cubrir guardia */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => abrirModalCubrir(vendedorGuardia)}
+                              className="text-orange-600 hover:text-orange-700"
+                            >
+                              <UserX className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="text-right">
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="outline" className="bg-white">
-                            <Target className="h-3 w-3 mr-1" />
-                            {vendedorGuardia.cargaActual}/{vendedorGuardia.metaDelDia}
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {vendedorGuardia.metaDelDia > 0 
-                            ? Math.round((vendedorGuardia.cargaActual / vendedorGuardia.metaDelDia) * 100)
-                            : 0}% completado
-                        </div>
-                      </div>
+                        
+                        {vendedorGuardia.observaciones && (
+                          <div className="mt-3 p-3 bg-white rounded-md text-sm text-gray-600">
+                            {vendedorGuardia.observaciones}
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+                  
+                  {vendedoresGuardia.filter(vg => vg.activo).length === 0 && (
+                    <div className="p-8 text-center text-gray-500">
+                      <UserCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No hay vendedores de guardia definidos</p>
                     </div>
-                    
-                    {vendedorGuardia.observaciones && (
-                      <div className="mt-3 p-3 bg-white rounded-md text-sm text-gray-600">
-                        {vendedorGuardia.observaciones}
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-              
-              {vendedoresGuardia.filter(vg => vg.activo).length === 0 && (
-                <div className="p-8 text-center text-gray-500">
-                  <UserCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No hay vendedores de guardia definidos</p>
+                  )}
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Tab de Importar Datos */}
+        <TabsContent value="importar" className="space-y-6">
+          <DragDropGuardias onDatosImportados={manejarDatosImportados} />
+        </TabsContent>
+
+        {/* Tab de Calendario */}
+        <TabsContent value="calendario" className="space-y-6">
+          <CalendarioGuardias 
+            onFechaSeleccionada={manejarFechaSeleccionada}
+            onEventoSeleccionado={(evento) => {
+              // Manejar selección de evento del calendario
+              console.log('Evento seleccionado:', evento);
+            }}
+          />
+        </TabsContent>
+
+        {/* Tab de Reportes */}
+        <TabsContent value="reportes" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BarChart3 className="h-5 w-5 mr-2" />
+                Reportes y Estadísticas
+              </CardTitle>
+              <CardDescription>
+                Análisis de rendimiento del sistema de guardias
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-12">
+                <FileSpreadsheet className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                  Reportes en Desarrollo
+                </h3>
+                <p className="text-gray-600">
+                  Los reportes detallados estarán disponibles próximamente
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Modal para Cubrir Guardia */}
+      <CubrirGuardiaModal
+        isOpen={modalCubrirAbierto}
+        onClose={() => setModalCubrirAbierto(false)}
+        vendedorGuardia={vendedorACubrir}
+        onGuardiaCubierta={manejarGuardiaCubierta}
+      />
     </div>
   );
 }

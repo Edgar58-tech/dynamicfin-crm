@@ -289,16 +289,18 @@ export default function CoachingPage() {
       });
 
       if (response.ok) {
+        const resultado = await response.json();
         toast.success('Sesión de coaching programada exitosamente');
         setFormData({ tipoCoaching: '', fechaSesion: '', objetivos: '' });
         setCurrentVendedorId(null);
         fetchCoachingData(); // Recargar datos
       } else {
-        toast.error('Error al programar sesión de coaching');
+        const errorData = await response.json();
+        toast.error(errorData.error || 'Error al programar sesión de coaching');
       }
     } catch (error) {
       console.error('Error:', error);
-      toast.error('Error de conexión');
+      toast.error('Error de conexión al servidor');
     }
   };
 

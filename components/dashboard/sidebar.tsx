@@ -101,6 +101,12 @@ export function Sidebar() {
       icon: UserPlus,
       roles: ['GERENTE_VENTAS', 'GERENTE_GENERAL'],
     },
+    {
+      title: '📋 Catálogo Vendedores',
+      href: '/dashboard/catalogo-vendedores',
+      icon: UserCog,
+      roles: ['GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_GENERAL'],
+    },
     
     {
       title: 'Calendario',
