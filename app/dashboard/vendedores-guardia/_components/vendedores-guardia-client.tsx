@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { GuardiaBalanceModal } from '@/components/guardia-balance-modal';
 import {
   Users,
   UserCheck,
@@ -23,7 +24,8 @@ import {
   RefreshCw,
   BarChart3,
   TrendingUp,
-  Bell
+  Bell,
+  Scale
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -65,6 +67,7 @@ export function VendedoresGuardiaClient() {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [observaciones, setObservaciones] = useState('');
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
 
   // Estados para configuración
   const [horaInicio, setHoraInicio] = useState('09:00');
@@ -213,6 +216,14 @@ export function VendedoresGuardiaClient() {
               </div>
             </div>
             <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBalanceModal(true)}
+              >
+                <Scale className="h-4 w-4 mr-2" />
+                Balance Guardias
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -511,6 +522,19 @@ export function VendedoresGuardiaClient() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de Balance de Guardias */}
+      <GuardiaBalanceModal
+        isOpen={showBalanceModal}
+        onClose={() => setShowBalanceModal(false)}
+        agenciaId={1} // TODO: Obtener de la sesión del usuario
+        mes={new Date().getMonth() + 1}
+        year={new Date().getFullYear()}
+        onBalanceApplied={() => {
+          cargarVendedoresGuardia();
+          toast.success('Balance de guardias aplicado exitosamente');
+        }}
+      />
     </div>
   );
 }
