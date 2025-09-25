@@ -235,7 +235,7 @@ Responde SOLO como el cliente, no rompas el personaje.
 
             const finalData = JSON.stringify({
               status: 'completed',
-              sessionId: rolePlaySession.id,
+              sessionId: rolePlaySession?.id || 0,
               response: respuestaCompleta,
               totalMessages: historialConversacion.length
             });
