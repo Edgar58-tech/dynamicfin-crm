@@ -223,7 +223,7 @@ Responde SOLO como el cliente, no rompas el personaje.
 
             // Actualizar sesión en base de datos
             await prisma.rolePlaySession.update({
-              where: { id: rolePlaySession.id },
+              where: { id: rolePlaySession?.id || 0  },
               data: {
                 conversacionCompleta: JSON.stringify(historialConversacion),
                 totalMensajes: historialConversacion.length,
