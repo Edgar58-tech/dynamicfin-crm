@@ -1,7 +1,7 @@
 // Force redeploy - cache clear v1.2 - TEMPORARY FIX FOR VERCEL
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth-options'
+import { authOptions } from '@/lib/auth';
 // import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
