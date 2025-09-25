@@ -189,7 +189,7 @@ Responde SOLO como el cliente, no rompas el personaje.
                     const progressData = JSON.stringify({
                       status: 'streaming',
                       content: content,
-                      sessionId: rolePlaySession.id,
+                      sessionId: rolePlaySession?.id || 0,
                       totalContent: buffer
                     });
                     controller.enqueue(encoder.encode(`data: ${progressData}\n\n`));
