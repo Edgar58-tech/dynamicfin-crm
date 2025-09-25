@@ -31,6 +31,27 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+// Importar datos de prueba
+import { roleplayScenarios, CATEGORIAS_ROLEPLAY, NIVELES_DIFICULTAD_ROLEPLAY, TIPOS_CLIENTE_AUTOMOTRIZ } from '@/app/roleplay-test/roleplayData';
+
+interface Scenario {
+  id: number;
+  titulo: string;
+  descripcion: string;
+  categoria: string;
+  nivelDificultad: string;
+  tipoCliente: string;
+  vehiculoInteres?: string;
+  presupuestoCliente?: number;
+  duracionEstimada: number;
+  activo: boolean;
+  dificultadPromedio?: number;
+  completadoVeces: number;
+  puntuacionPromedio?: number;
+  etiquetas: string[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface RolePlayScenariosProps {
   onSelectScenario?: (scenario: Scenario) => void;
@@ -39,28 +60,10 @@ interface RolePlayScenariosProps {
   showManagement?: boolean;
 }
 
-const CATEGORIAS = [
-  { value: 'prospectacion', label: 'Prospección Inicial' },
-  { value: 'objeciones', label: 'Manejo de Objeciones' },
-  { value: 'cierre', label: 'Técnicas de Cierre' },
-  { value: 'situaciones_dificiles', label: 'Situaciones Difíciles' }
-];
-
-const TIPOS_CLIENTE = [
-  { value: 'indeciso', label: 'Cliente Indeciso' },
-  { value: 'precio_sensible', label: 'Sensible al Precio' },
-  { value: 'tecnico', label: 'Cliente Técnico' },
-  { value: 'impulsivo', label: 'Cliente Impulsivo' },
-  { value: 'desconfiado', label: 'Cliente Desconfiado' },
-  { value: 'informado', label: 'Cliente Informado' }
-];
-
-const NIVELES_DIFICULTAD = [
-  { value: 'principiante', label: '⭐ Principiante' },
-  { value: 'medio', label: '⭐⭐ Medio' },
-  { value: 'avanzado', label: '⭐⭐⭐ Avanzado' },
-  { value: 'experto', label: '⭐⭐⭐⭐ Experto' }
-];
+// Usar constantes importadas de los datos de prueba
+const CATEGORIAS = CATEGORIAS_ROLEPLAY;
+const TIPOS_CLIENTE = TIPOS_CLIENTE_AUTOMOTRIZ;
+const NIVELES_DIFICULTAD = NIVELES_DIFICULTAD_ROLEPLAY;
 
 export default function RolePlayScenarios({ 
   onSelectScenario, 
@@ -68,7 +71,8 @@ export default function RolePlayScenarios({
   selectedScenario,
   showManagement = false
 }: RolePlayScenariosProps) {
-  const { data: session } = useSession();
+  // const { data: session } = useSession();
+  const session = null;
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -101,37 +105,120 @@ export default function RolePlayScenarios({
   const fetchScenarios = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (categoryFilter && categoryFilter !== 'all') params.append('categoria', categoryFilter);
-      if (difficultyFilter && difficultyFilter !== 'all') params.append('nivel', difficultyFilter);
-      if (clientTypeFilter && clientTypeFilter !== 'all') params.append('tipoCliente', clientTypeFilter);
-      params.append('activo', 'true');
-
-      const response = await fetch(`/api/roleplay/scenarios?${params.toString()}`);
-      if (response.ok) {
-        const data = await response.json();
-        setScenarios(data.scenarios);
-      } else {
-        toast.error('Error al cargar escenarios');
+      
+      // Simular delay de API para realismo
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Filtrar escenarios según los filtros aplicados
+      let filteredScenarios = roleplayScenarios.filter(scenario => scenario.activo);
+      
+      if (categoryFilter && categoryFilter !== 'all') {
+        filteredScenarios = filteredScenarios.filter(scenario => 
+          scenario.categoria === categoryFilter
+        );
       }
+      
+      if (difficultyFilter && difficultyFilter !== 'all') {
+        filteredScenarios = filteredScenarios.filter(scenario => 
+          scenario.nivelDificultad === difficultyFilter
+        );
+      }
+      
+      if (clientTypeFilter && clientTypeFilter !== 'all') {
+        filteredScenarios = filteredScenarios.filter(scenario => 
+          scenario.tipoCliente === clientTypeFilter
+        );
+      }
+      
+      setScenarios(filteredScenarios);
+      toast.success(`${filteredScenarios.length} escenarios cargados exitosamente`);
     } catch (error) {
       console.error('Error fetching scenarios:', error);
-      toast.error('Error de conexión');
+      toast.error('Error al cargar escenarios');
     } finally {
       setLoading(false);
     }
   };
 
   const createScenario = async () => {
-    // Lógica para crear...
+    try {
+      // Simular creación de escenario (en implementación real se enviaría a API)
+      const newScenario = {
+        id: Math.max(...roleplayScenarios.map(s => s.id)) + 1,
+        ...formData,
+        presupuestoCliente: formData.presupuestoCliente ? parseFloat(formData.presupuestoCliente) : undefined,
+        activo: true,
+        completadoVeces: 0,
+        etiquetas: formData.etiquetas.split(',').map(s => s.trim()).filter(s => s),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        // Campos específicos SPCC (valores por defecto para demo)
+        pilaresSPCC: ["Saludo y Primera Impresión", "Prospección Efectiva"],
+        contextoCliente: "Cliente de prueba creado desde interfaz",
+        objetivoEscenario: "Practicar habilidades básicas de venta",
+        objecionesEsperadas: ["Necesito pensarlo", "Está muy caro"],
+        respuestasSugeridas: ["Entiendo su preocupación", "Permíteme explicarte el valor"],
+        metricasExito: ["Obtener información de contacto", "Agendar segunda cita"],
+        situacionInicial: "Cliente entra al showroom",
+        trasfondoCliente: "Cliente potencial interesado",
+        desafiosEspecificos: ["Establecer rapport inicial"]
+      };
+
+      // En implementación real, esto se enviaría a la API
+      roleplayScenarios.push(newScenario as any);
+      
+      toast.success('Escenario creado exitosamente (modo demo)');
+      setShowCreateDialog(false);
+      resetForm();
+      fetchScenarios();
+    } catch (error) {
+      console.error('Error creating scenario:', error);
+      toast.error('Error al crear escenario');
+    }
   };
 
   const updateScenario = async () => {
-    // Lógica para actualizar...
+    if (!editingScenario) return;
+
+    try {
+      // Simular actualización de escenario (en implementación real se enviaría a API)
+      const scenarioIndex = roleplayScenarios.findIndex(s => s.id === editingScenario.id);
+      if (scenarioIndex !== -1) {
+        roleplayScenarios[scenarioIndex] = {
+          ...roleplayScenarios[scenarioIndex],
+          ...formData,
+          presupuestoCliente: formData.presupuestoCliente ? parseFloat(formData.presupuestoCliente) : undefined,
+          etiquetas: formData.etiquetas.split(',').map(s => s.trim()).filter(s => s),
+          updatedAt: new Date().toISOString()
+        };
+      }
+
+      toast.success('Escenario actualizado exitosamente (modo demo)');
+      setEditingScenario(null);
+      resetForm();
+      fetchScenarios();
+    } catch (error) {
+      console.error('Error updating scenario:', error);
+      toast.error('Error al actualizar escenario');
+    }
   };
 
   const deleteScenario = async (id: number) => {
-    // Lógica para borrar...
+    if (!confirm('¿Estás seguro de que quieres eliminar este escenario?')) return;
+
+    try {
+      // Simular eliminación de escenario (en implementación real se enviaría a API)
+      const scenarioIndex = roleplayScenarios.findIndex(s => s.id === id);
+      if (scenarioIndex !== -1) {
+        roleplayScenarios.splice(scenarioIndex, 1);
+      }
+
+      toast.success('Escenario eliminado exitosamente (modo demo)');
+      fetchScenarios();
+    } catch (error) {
+      console.error('Error deleting scenario:', error);
+      toast.error('Error al eliminar escenario');
+    }
   };
 
   const resetForm = () => {
@@ -192,8 +279,166 @@ export default function RolePlayScenarios({
           </p>
         </div>
         
-        {/* ... (resto del JSX del return, que no necesita cambios de sintaxis) ... */}
-
+        <div className="flex items-center gap-3">
+          <Button onClick={fetchScenarios} variant="outline" size="sm">
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+          
+          {showManagement && canManageScenarios && (
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  Crear Escenario
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingScenario ? 'Editar Escenario' : 'Crear Nuevo Escenario'}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Configura los detalles del escenario de role play
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label>Título del Escenario</Label>
+                    <Input
+                      value={formData.titulo}
+                      onChange={(e) => setFormData(prev => ({...prev, titulo: e.target.value}))}
+                      placeholder="Ej: Cliente indeciso que necesita pensarlo"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>Descripción</Label>
+                    <Textarea
+                      value={formData.descripcion}
+                      onChange={(e) => setFormData(prev => ({...prev, descripcion: e.target.value}))}
+                      placeholder="Describe la situación y contexto del escenario..."
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Categoría</Label>
+                      <Select 
+                        value={formData.categoria} 
+                        onValueChange={(value) => setFormData(prev => ({...prev, categoria: value}))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona categoría" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIAS.filter(cat => cat.value && cat.value.trim() !== '').map(cat => (
+                            <SelectItem key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <Label>Tipo de Cliente</Label>
+                      <Select 
+                        value={formData.tipoCliente} 
+                        onValueChange={(value) => setFormData(prev => ({...prev, tipoCliente: value}))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TIPOS_CLIENTE.filter(tipo => tipo.value && tipo.value.trim() !== '').map(tipo => (
+                            <SelectItem key={tipo.value} value={tipo.value}>
+                              {tipo.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Nivel de Dificultad</Label>
+                      <Select 
+                        value={formData.nivelDificultad} 
+                        onValueChange={(value) => setFormData(prev => ({...prev, nivelDificultad: value}))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {NIVELES_DIFICULTAD.filter(nivel => nivel.value && nivel.value.trim() !== '').map(nivel => (
+                            <SelectItem key={nivel.value} value={nivel.value}>
+                              {nivel.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <Label>Duración Estimada (minutos)</Label>
+                      <Input
+                        type="number"
+                        value={formData.duracionEstimada}
+                        onChange={(e) => setFormData(prev => ({...prev, duracionEstimada: parseInt(e.target.value) || 15}))}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Vehículo de Interés (opcional)</Label>
+                      <Input
+                        value={formData.vehiculoInteres}
+                        onChange={(e) => setFormData(prev => ({...prev, vehiculoInteres: e.target.value}))}
+                        placeholder="Ej: SUV Premium"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label>Presupuesto (opcional)</Label>
+                      <Input
+                        type="number"
+                        value={formData.presupuestoCliente}
+                        onChange={(e) => setFormData(prev => ({...prev, presupuestoCliente: e.target.value}))}
+                        placeholder="500000"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label>Etiquetas (separadas por comas)</Label>
+                    <Input
+                      value={formData.etiquetas}
+                      onChange={(e) => setFormData(prev => ({...prev, etiquetas: e.target.value}))}
+                      placeholder="prospección, primer contacto, SUV"
+                    />
+                  </div>
+                </div>
+                
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => {
+                    setShowCreateDialog(false);
+                    setEditingScenario(null);
+                    resetForm();
+                  }}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={editingScenario ? updateScenario : createScenario}>
+                    {editingScenario ? 'Actualizar' : 'Crear'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
       </div>
 
       {/* Filtros y Búsqueda */}
@@ -214,7 +459,7 @@ export default function RolePlayScenarios({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas las categorías</SelectItem>
-            {CATEGORIAS.map(cat => (
+            {CATEGORIAS.filter(cat => cat.value && cat.value.trim() !== '').map(cat => (
               <SelectItem key={cat.value} value={cat.value}>
                 {cat.label}
               </SelectItem>
@@ -228,7 +473,7 @@ export default function RolePlayScenarios({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas</SelectItem>
-            {NIVELES_DIFICULTAD.map(nivel => (
+            {NIVELES_DIFICULTAD.filter(nivel => nivel.value && nivel.value.trim() !== '').map(nivel => (
               <SelectItem key={nivel.value} value={nivel.value}>
                 {nivel.label}
               </SelectItem>

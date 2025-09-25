@@ -1,10 +1,9 @@
+// Prisma client placeholder
+export const prisma = {
+  // Placeholder for Prisma client
+  // In a real implementation, this would be the actual Prisma client
+  $connect: () => Promise.resolve(),
+  $disconnect: () => Promise.resolve(),
+};
 
-import { PrismaClient } from '@prisma/client'
-
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
-}
-
-export const prisma = globalForPrisma.prisma ?? new PrismaClient()
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+export default prisma;

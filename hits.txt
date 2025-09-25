@@ -1,0 +1,130 @@
+.env:35:SUPABASE_AUDIO_BUCKET=audio-recordings
+PROXIMITY_SYSTEM_SUMMARY.md:50:#### **`/api/proximity/configure`** (GET, POST, PUT, DELETE)
+PROXIMITY_SYSTEM_SUMMARY.md:55:#### **`/api/proximity/zones`** (GET, POST, PUT, DELETE)
+PROXIMITY_SYSTEM_SUMMARY.md:61:#### **`/api/proximity/auto-record`** (GET, POST, PUT)
+PROXIMITY_SYSTEM_SUMMARY.md:67:#### **`/api/proximity/status`** (GET, POST)
+PROXIMITY_SYSTEM_SUMMARY.md:110:#### **Página Principal**: `/dashboard/proximity`
+app/api/proximity/auto-record/route.ts:316:    console.error('Error starting proximity recording:', error);
+app/api/proximity/auto-record/route.ts:482:    console.error('Error finishing proximity recording:', error);
+app/api/proximity/auto-record/route.ts:572:    console.error('Error fetching proximity recordings:', error);
+app/api/proximity/configure/route.ts:90:    console.error('Error fetching proximity configuration:', error);
+app/api/proximity/configure/route.ts:247:    console.error('Error saving proximity configuration:', error);
+app/api/proximity/configure/route.ts:359:    console.error('Error updating proximity configuration:', error);
+app/api/proximity/configure/route.ts:435:    console.error('Error deleting proximity configuration:', error);
+app/api/proximity/status/route.ts:314:    console.error('Error fetching proximity status:', error);
+app/api/proximity/status/route.ts:417:    console.error('Error registering proximity event:', error);
+app/api/proximity/zones/route.ts:122:    console.error('Error fetching proximity zones:', error);
+app/api/proximity/zones/route.ts:259:    console.error('Error creating proximity zone:', error);
+app/api/proximity/zones/route.ts:396:    console.error('Error updating proximity zone:', error);
+app/api/proximity/zones/route.ts:483:    console.error('Error deleting proximity zone:', error);
+app/api/roleplay/evaluate/route.ts:42:Eres un experto en evaluación de técnicas de venta automotriz. Analiza la siguiente conversación de role play entre un vendedor y un cliente simulado.
+app/api/roleplay/feedback/route.ts:134:Eres un mentor experto en ventas automotrices. Basándote en la evaluación de esta sesión de role play, genera feedback específico y accionable.
+app/api/roleplay/simulate/route.ts:83:Eres un cliente potencial de automóviles en una simulación de role play para entrenar vendedores. 
+app/dashboard/proximity/_components/proximity-dashboard-client.tsx:29:import ProximityRecording from '@/components/proximity-recording';
+app/dashboard/proximity/_components/proximity-dashboard-client.tsx:31:import ProximityHistory from './proximity-history';
+app/dashboard/proximity/_components/proximity-dashboard-client.tsx:32:import ProximityStats from './proximity-stats';
+app/dashboard/proximity/_components/proximity-dashboard-client.tsx:56:      const response = await fetch('/api/proximity/status?detalle=true');
+app/dashboard/proximity/_components/proximity-history.tsx:84:      const response = await fetch(`/api/proximity/auto-record?${params.toString()}`);
+app/dashboard/proximity/_components/zone-management.tsx:92:      const response = await fetch('/api/proximity/zones?activo=true');
+app/dashboard/proximity/_components/zone-management.tsx:190:        ? '/api/proximity/zones' 
+app/dashboard/proximity/_components/zone-management.tsx:191:        : '/api/proximity/zones';
+app/dashboard/proximity/_components/zone-management.tsx:239:      const response = await fetch(`/api/proximity/zones?id=${zona.id}`, {
+app/dashboard/proximity/page.tsx:5:import ProximityDashboardClient from './_components/proximity-dashboard-client';
+app/dashboard/roleplay/page.tsx:31:import RolePlaySimulator from '@/components/roleplay-simulator';
+app/dashboard/roleplay/page.tsx:32:import RolePlayScenarios from '@/components/roleplay-scenarios';
+app/dashboard/roleplay/page.tsx:77:      const response = await fetch('/api/roleplay/progress');
+app/dashboard/roleplay/page.tsx:91:      const response = await fetch('/api/roleplay/evaluate?limit=5');
+components/GrabacionConversacion.tsx:68:  const [recordingTime, setRecordingTime] = useState(0);
+components/GrabacionConversacion.tsx:75:  const [currentStep, setCurrentStep] = useState<'recording' | 'upload' | 'transcribe' | 'analyze' | 'complete'>('recording');
+components/GrabacionConversacion.tsx:136:      setCurrentStep('recording');
+components/GrabacionConversacion.tsx:338:    setCurrentStep('recording');
+components/GrabacionConversacion.tsx:442:            {['recording', 'upload', 'transcribe', 'analyze', 'complete'].map((step, index) => {
+components/GrabacionConversacion.tsx:444:              const isCompleted = ['recording', 'upload', 'transcribe', 'analyze', 'complete'].indexOf(currentStep) > index;
+components/GrabacionConversacion.tsx:466:          {currentStep === 'recording' && (
+components/GrabacionConversacion.tsx:510:                        {formatTime(recordingTime)}
+components/dashboard/sidebar.tsx:137:      href: '/dashboard/roleplay',
+components/proximity-recording.tsx:175:      const response = await fetch('/api/proximity/configure');
+components/proximity-recording.tsx:196:      const response = await fetch('/api/proximity/zones?activo=true');
+components/proximity-recording.tsx:432:      const response = await fetch('/api/proximity/auto-record', {
+components/proximity-recording.tsx:490:      const response = await fetch('/api/proximity/auto-record', {
+components/proximity-recording.tsx:608:      await fetch('/api/proximity/status', {
+components/proximity-recording.tsx:636:        tag: 'proximity-recording',
+components/proximity-recording.tsx:686:      const response = await fetch('/api/proximity/configure', {
+components/proximity-recording.tsx:709:      const response = await fetch('/api/proximity/configure', {
+components/roleplay-scenarios.tsx:130:      const response = await fetch(`/api/roleplay/scenarios?${params.toString()}`);
+components/roleplay-scenarios.tsx:155:      const response = await fetch('/api/roleplay/scenarios', {
+components/roleplay-scenarios.tsx:189:      const response = await fetch('/api/roleplay/scenarios', {
+components/roleplay-scenarios.tsx:214:      const response = await fetch(`/api/roleplay/scenarios?id=${id}`, {
+components/roleplay-scenarios.tsx:350:                    Configura los detalles del escenario de role play
+components/roleplay-simulator.tsx:144:      const response = await fetch('/api/roleplay/simulate', {
+components/roleplay-simulator.tsx:237:      const finishResponse = await fetch('/api/roleplay/simulate', {
+components/roleplay-simulator.tsx:251:      const evaluateResponse = await fetch('/api/roleplay/evaluate', {
+components/roleplay-simulator.tsx:325:            Elige un escenario de role play para comenzar tu entrenamiento
+lib/audio-utils.ts:127:        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+lib/audio-utils.ts:179:    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+lib/audio-utils.ts:269:    return this.mediaRecorder?.state === 'recording';
+lib/proximity-sw.ts:17:  proximityZones: number;
+lib/proximity-sw.ts:37:      console.log('Registering proximity service worker...');
+lib/proximity-sw.ts:39:      this.registration = await navigator.serviceWorker.register('/sw-proximity.js', {
+lib/proximity-sw.ts:54:      console.error('Error registering proximity service worker:', error);
+lib/proximity-sw.ts:97:        const handler = this.messageHandlers.get('recording_command');
+lib/proximity-sw.ts:200:      console.error('Error unregistering proximity service worker:', error);
+lib/proximity-sw.ts:231:export const proximityServiceWorker = new ProximityServiceWorker();
+lib/proximity-sw.ts:243:      const registered = await proximityServiceWorker.register();
+lib/proximity-sw.ts:250:    proximityServiceWorker.onMessage('status_update', (data) => {
+lib/proximity-sw.ts:255:    proximityServiceWorker.onMessage('recording_command', (data) => {
+lib/proximity-sw.ts:262:      proximityServiceWorker.offMessage('status_update');
+lib/proximity-sw.ts:263:      proximityServiceWorker.offMessage('recording_command');
+lib/proximity-sw.ts:269:      await proximityServiceWorker.startMonitoring(config);
+lib/proximity-sw.ts:279:      await proximityServiceWorker.stopMonitoring();
+lib/proximity-sw.ts:289:      await proximityServiceWorker.updateConfig(config);
+lib/proximity-sw.ts:299:      const status = await proximityServiceWorker.getStatus();
+lib/proximity-sw.ts:315:    serviceWorker: proximityServiceWorker,
+lib/storage.ts:58:    bucket: process.env.SUPABASE_AUDIO_BUCKET || 'audio-recordings',
+prisma/schema.prisma:1287:  @@map("roleplay_scenarios")
+prisma/schema.prisma:1328:  @@map("roleplay_sessions")
+prisma/schema.prisma:1367:  @@map("roleplay_evaluations")
+prisma/schema.prisma:1411:  @@map("roleplay_progress")
+prisma/schema.prisma:1447:  @@map("roleplay_feedback")
+prisma/schema.prisma:1473:  @@map("roleplay_configurations")
+public/sw-proximity.js:9:const CACHE_NAME = `proximity-sw-${SW_VERSION}`;
+public/sw-proximity.js:16:let proximityZones = [];
+public/sw-proximity.js:19:let proximityInterval = null;
+public/sw-proximity.js:24:  '/api/proximity/zones',
+public/sw-proximity.js:25:  '/api/proximity/configure',
+public/sw-proximity.js:26:  '/api/proximity/auto-record',
+public/sw-proximity.js:27:  '/api/proximity/status',
+public/sw-proximity.js:34:  console.log('[SW] Installing proximity service worker version:', SW_VERSION);
+public/sw-proximity.js:51:  console.log('[SW] Activating proximity service worker');
+public/sw-proximity.js:125:      tag: 'proximity-notification',
+public/sw-proximity.js:145:  if (event.action === 'confirm_recording') {
+public/sw-proximity.js:148:  } else if (event.action === 'cancel_recording') {
+public/sw-proximity.js:163:  console.log('[SW] Starting proximity monitoring with config:', config);
+public/sw-proximity.js:172:  proximityZones = config.zones || [];
+public/sw-proximity.js:196:  proximityInterval = setInterval(() => {
+public/sw-proximity.js:207:  console.log('[SW] Stopping proximity monitoring');
+public/sw-proximity.js:216:  if (proximityInterval) {
+public/sw-proximity.js:217:    clearInterval(proximityInterval);
+public/sw-proximity.js:218:    proximityInterval = null;
+public/sw-proximity.js:239:    startProximityMonitoring({ userConfig, zones: proximityZones });
+public/sw-proximity.js:248:  proximityZones = zones || [];
+public/sw-proximity.js:259:    proximityZones: proximityZones.length,
+public/sw-proximity.js:319:  if (!proximityZones.length) return;
+public/sw-proximity.js:324:  proximityZones.forEach(zone => {
+public/sw-proximity.js:392:  console.log('[SW] Starting automatic recording in zone:', zone.nombre);
+public/sw-proximity.js:407:    recordingId: activeRecording.id,
+public/sw-proximity.js:415:      { action: 'stop_recording', title: 'Detener' },
+public/sw-proximity.js:420:  sendStatusUpdate('recording_started', activeRecording);
+public/sw-proximity.js:430:  console.log('[SW] Finishing recording, reason:', reason);
+public/sw-proximity.js:436:    recordingId: activeRecording.id,
+public/sw-proximity.js:447:      { action: 'view_recording', title: 'Ver Grabación' },
+public/sw-proximity.js:452:  sendStatusUpdate('recording_finished', { ...activeRecording, duration, reason });
+public/sw-proximity.js:471:      { action: 'confirm_recording', title: 'Iniciar' },
+public/sw-proximity.js:472:      { action: 'cancel_recording', title: 'Cancelar' },
+public/sw-proximity.js:491:    tag: 'proximity-notification',
+public/sw-proximity.js:513:  sendStatusUpdate('recording_cancelled', data);
+public/sw-proximity.js:520:  console.log('[SW] Sending recording command:', command, data);
+public/sw-proximity.js:571:    fetch('/api/proximity/status', {
+public/sw-proximity.js:689:    const recordingDuration = Date.now() - new Date(activeRecording.startTime).getTime();
+public/sw-proximity.js:692:    if (recordingDuration > maxDuration) {
+scripts/seed-gerencial.ts.bak:228:            'Sesión de role playing',
