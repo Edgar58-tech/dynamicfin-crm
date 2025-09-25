@@ -249,7 +249,7 @@ Responde SOLO como el cliente, no rompas el personaje.
             status: 'error',
             message: 'Error en el streaming de la IA',
             error: error.message,
-            sessionId: rolePlaySession?.id|| 0
+            sessionId: rolePlaySession?.id || 0
           });
           controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
           controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
