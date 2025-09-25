@@ -6,7 +6,7 @@
  */
 
 'use client';
-
+// Force GitHub sync - deployment fix
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';

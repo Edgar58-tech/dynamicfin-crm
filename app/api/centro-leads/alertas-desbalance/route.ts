@@ -1,4 +1,4 @@
-
+// Force redeploy - cache clear v1.1
 // API para gestión de alertas de desbalance en Centro de Leads
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
