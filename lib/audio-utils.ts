@@ -5,4 +5,6 @@ export const audioUtils = {
   analyzeAudio: () => {},
 };
 
-export default audioUtils;
+// export default audioUtils;
+// Export default class
+export default AudioRecorder
