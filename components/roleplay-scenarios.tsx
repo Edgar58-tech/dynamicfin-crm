@@ -41,7 +41,7 @@ interface Scenario {
   categoria: string;
   nivelDificultad: string;
   tipoCliente: string;
-  vehiculoInteres?: string;
+  vehiculoInteres?: string | null;  // ← Agregar | null aquí
   presupuestoCliente?: number;
   duracionEstimada: number;
   activo: boolean;
