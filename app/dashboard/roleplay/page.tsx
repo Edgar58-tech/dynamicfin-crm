@@ -149,7 +149,7 @@ export default function RolePlayPage() {
     return 'text-red-600';
   };
 
-  if (status === 'loading' || loading) {
+  if (status === 'loading') {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
