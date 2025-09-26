@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
       status: session.estadoSession === 'completada' ? 'completed' : 'active',
       duration: session.duracionMinutos || 0,
       completedAt: session.fechaFin,
-      createdAt: session.createdAt
+      createdAt: session.fechaInicio
     })
     
   } catch (error) {
