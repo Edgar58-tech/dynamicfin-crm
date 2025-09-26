@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const session = await prisma.escenarioSession.findUnique({
+    const session = await prisma.rolePlaySession.findUnique({
       where: { id: parseInt(sessionId) }
     })
 
