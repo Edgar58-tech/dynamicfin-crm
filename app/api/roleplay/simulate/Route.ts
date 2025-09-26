@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
           setTimeout(async () => {
             try {
               // Actualizar sesión en base de datos con null-safe access
-              await prisma.escenarioSession.update({
+              await prisma.rolePlaySession.update({
                 where: { id: escenarioSession?.id || 0 },  // ✅ CORREGIDO - Era línea 226
                 data: {
                   transcripcion: JSON.stringify(historialConversacion),
