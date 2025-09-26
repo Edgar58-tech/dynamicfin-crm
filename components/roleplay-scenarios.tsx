@@ -1,5 +1,5 @@
 'use client';
-import { RolePlayScenario as Scenario } from '@prisma/client';
+import { RolePlayScenario } from '@prisma/client';
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,24 +34,9 @@ import toast from 'react-hot-toast';
 // Importar datos de prueba
 import { roleplayScenarios, CATEGORIAS_ROLEPLAY, NIVELES_DIFICULTAD_ROLEPLAY, TIPOS_CLIENTE_AUTOMOTRIZ } from '@/app/roleplay-test/roleplayData';
 
-interface Scenario {
-  id: number;
-  titulo: string;
-  descripcion: string;
-  categoria: string;
-  nivelDificultad: string;
-  tipoCliente: string;
-  vehiculoInteres?: string | null;  // ← Agregar | null aquí
-  resupuestoCliente?: number | null;
-  duracionEstimada: number;
-  activo: boolean;
-  dificultadPromedio?: number | null;     // ✅ Compatible (recién corregido)
-  completadoVeces: number;
-  puntuacionPromedio?: number | null;
-  etiquetas: string[];
-  createdAt: string;
-  updatedAt: string;
-}
+// DESPUÉS (solución definitiva)
+import { RolePlayScenario } from '@prisma/client';
+type Scenario = RolePlayScenario;    // ✅ 100% compatible
 
 interface RolePlayScenariosProps {
   onSelectScenario?: (scenario: Scenario) => void;
