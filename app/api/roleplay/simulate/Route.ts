@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
               await prisma.rolePlaySession.update({
                 where: { id: escenarioSession?.id || 0 },  // ✅ CORREGIDO - Era línea 226
                 data: {
-                  transcripcion: JSON.stringify(historialConversacion),
+                  conversacionCompleta: JSON.stringify(historialConversacion),
                   fechaFin: new Date(),
                   completado: true
                 }
