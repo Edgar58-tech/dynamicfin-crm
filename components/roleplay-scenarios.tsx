@@ -45,7 +45,7 @@ interface Scenario {
   resupuestoCliente?: number | null;
   duracionEstimada: number;
   activo: boolean;
-  dificultadPromedio?: number;
+  dificultadPromedio?: number | null;     // ✅ Compatible (recién corregido)
   completadoVeces: number;
   puntuacionPromedio?: number | null;
   etiquetas: string[];
