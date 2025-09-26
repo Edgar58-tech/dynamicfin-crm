@@ -42,12 +42,12 @@ interface Scenario {
   nivelDificultad: string;
   tipoCliente: string;
   vehiculoInteres?: string | null;  // ← Agregar | null aquí
-  presupuestoCliente?: number;
+  resupuestoCliente?: number | null;
   duracionEstimada: number;
   activo: boolean;
   dificultadPromedio?: number;
   completadoVeces: number;
-  puntuacionPromedio?: number;
+  puntuacionPromedio?: number | null;
   etiquetas: string[];
   createdAt: string;
   updatedAt: string;
