@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
                 data: {
                   conversacionCompleta: JSON.stringify(historialConversacion),
                   fechaFin: new Date(),
-                  completado: true
+                  estadoSession: 'completada'
                 }
               })
 
