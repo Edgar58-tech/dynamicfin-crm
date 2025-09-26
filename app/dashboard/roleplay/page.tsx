@@ -331,7 +331,7 @@ export default function RolePlayPage() {
 
         <TabsContent value="escenarios" className="space-y-6">
           <RolePlayScenarios
-            selectedScenario={selectedScenario}
+            selectedScenario={selectedScenario || undefined}
             onSelectScenario={handleScenarioSelect}
             onStartSimulation={handleStartSimulation}
             showManagement={true}
