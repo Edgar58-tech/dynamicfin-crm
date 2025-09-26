@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       sessionId: session.id,
-      status: session.completado ? 'completed' : 'active',
+      status: session.estadoSession === 'completada' ? 'completed' : 'active',
       duration: session.duracionSegundos || 0,
       completedAt: session.fechaFin,
       createdAt: session.createdAt
