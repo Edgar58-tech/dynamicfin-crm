@@ -566,8 +566,8 @@ export default function ProximityRecording({
       // Aquí se integraría con el sistema de subida y procesamiento existente
       // Por simplicidad, retornamos el resultado del audio
       return {
-        blob: result.blob,
-        metadata: result.metadata,
+        blob: result,
+        metadata: {}, // Devolvemos metadata vacía ya que result no la contiene
         grabacionId: null, // Se obtendría del sistema de grabación principal
       };
     } catch (error) {
