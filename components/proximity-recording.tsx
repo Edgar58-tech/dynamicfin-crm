@@ -543,7 +543,7 @@ export default function ProximityRecording({
       }
 
       const recorder = new AudioRecorder();
-      await recorder.startRecording();
+      await recorder.start();
       
       setAudioRecorder(recorder);
       setGrabando(true);
