@@ -130,7 +130,7 @@ export default function GrabacionConversacion({
         if (!recorder) return;
       }
 
-      await recorder.startRecording();
+      await recorder.start();
       setIsRecording(true);
       setRecordingTime(0);
       setCurrentStep('recording');
