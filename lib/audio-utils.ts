@@ -212,6 +212,10 @@ export function audioBlobToBase64(blob: Blob): Promise<string> {
   })
 }
 
+export function checkAudioSupport(): boolean {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+}
+
 // Export default class
 export default AudioRecorder
 der
