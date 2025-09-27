@@ -109,9 +109,9 @@ export default function GrabacionConversacion({
 
   const initializeRecorder = async () => {
     try {
-      const settings = getOptimalSettings();
-      const recorder = new AudioRecorder(settings);
-      setAudioRecorder(recorder);
+      // Ya no necesitamos la variable 'settings' aquí.
+      // Simplemente crea la instancia, y usará las opciones por defecto del micrófono.
+      const recorder = new AudioRecorder();      setAudioRecorder(recorder);
       return recorder;
     } catch (error) {
       console.error('Error initializing recorder:', error);
