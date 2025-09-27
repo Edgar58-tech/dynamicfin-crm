@@ -497,7 +497,7 @@ export default function ProximityRecording({
           precision: ubicacion.precision,
           grabacionConversacionId: resultadoAudio?.grabacionId,
           motivoFinalizacion: 'salida_zona',
-          calidadDetectada: resultadoAudio?.metadata?.quality,
+          calidadDetectada: null, // Asignamos null ya que no tenemos este dato
         }),
       });
 
