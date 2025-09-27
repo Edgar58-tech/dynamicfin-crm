@@ -93,7 +93,7 @@ export default function GrabacionConversacion({
   useEffect(() => {
     const audioSupport = checkAudioSupport();
     if (!audioSupport) {
-      setError(`Tu navegador no soporta grabación de audio: ${audioSupport.errors.join(', ')}`);
+      setError('Tu navegador no soporta la API de grabación de audio.');
     }
 
     return () => {
