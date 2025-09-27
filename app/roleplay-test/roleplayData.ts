@@ -372,7 +372,7 @@ export const roleplayScenarios: RolePlayScenario[] = [
   {
     id: 7,
     titulo: "Cierre Consultivo Complejo - Decisión Familiar Múltiple",
-    descripción: "Familia extendida (3 generaciones) necesita renovar 4 vehículos diferentes. Cada miembro tiene necesidades distintas, presupuestos variables y todos opinan en las decisiones.",
+    descripcion: "Familia extendida (3 generaciones) necesita renovar 4 vehículos diferentes. Cada miembro tiene necesidades distintas, presupuestos variables y todos opinan en las decisiones.",
     categoria: "cierre",
     nivelDificultad: "experto",
     tipoCliente: "cliente",
