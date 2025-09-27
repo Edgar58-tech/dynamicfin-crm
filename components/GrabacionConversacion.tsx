@@ -161,7 +161,7 @@ export default function GrabacionConversacion({
         clearInterval(intervalRef.current);
       }
 
-      toast.success(`🎵 Grabación completada: ${formatDuration(result.metadata.duration)}`);
+      toast.success(`🎵 Grabación completada: ${formatDuration(recordingTime)}`);
       setCurrentStep('upload');
     } catch (error) {
       console.error('Error al detener grabación:', error);
