@@ -539,7 +539,7 @@ export default function ProximityRecording({
         settings.bitsPerSecond = 256000;
       } else if (configuracion?.calidadAudio === 'baja') {
         settings.sampleRate = 16000;
-        settings.bitRate = 32000;
+        settings.bitsPerSecond = 32000;
       }
 
       const recorder = new AudioRecorder(settings);
