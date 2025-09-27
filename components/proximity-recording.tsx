@@ -560,8 +560,7 @@ export default function ProximityRecording({
     if (!audioRecorder || !grabando) return null;
 
     try {
-      const result = await audioRecorder.stopRecording();
-      setGrabando(false);
+      const result = await audioRecorder.stop();      setGrabando(false);
       setAudioRecorder(null);
 
       // Aquí se integraría con el sistema de subida y procesamiento existente
