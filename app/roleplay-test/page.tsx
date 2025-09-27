@@ -62,9 +62,9 @@ interface RecentSession {
 }
 
 export default function RolePlayPage() {
-  // const { data: session, status } = useSession();
-  const session = null;
-  const status = 'unauthenticated';
+const { data: session, status } = useSession() || {};
+// const session = null;
+// const status = 'unauthenticated';
   const [activeTab, setActiveTab] = useState('simulador');
   const [selectedScenario, setSelectedScenario] = useState<RolePlayScenario | undefined>(undefined);
   const [progress, setProgress] = useState<Progress | null>(null);
