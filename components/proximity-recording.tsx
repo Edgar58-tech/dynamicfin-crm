@@ -542,7 +542,7 @@ export default function ProximityRecording({
         settings.bitsPerSecond = 32000;
       }
 
-      const recorder = new AudioRecorder(settings);
+      const recorder = new AudioRecorder();
       await recorder.startRecording();
       
       setAudioRecorder(recorder);
