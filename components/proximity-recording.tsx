@@ -536,7 +536,7 @@ export default function ProximityRecording({
       // Aplicar configuración personalizada
       if (configuracion?.calidadAudio === 'alta') {
         settings.sampleRate = 48000;
-        settings.bitRate = 256000;
+        settings.bitsPerSecond = 256000;
       } else if (configuracion?.calidadAudio === 'baja') {
         settings.sampleRate = 16000;
         settings.bitRate = 32000;
