@@ -101,7 +101,7 @@ export class AudioRecorder {
         this.cleanup()
         resolve(audioBlob)
       }
-
+      
       this.mediaRecorder.onerror = (event) => {
         this.cleanup()
         reject(new Error('Recording error: ' + (event as any).error?.message))
@@ -111,6 +111,16 @@ export class AudioRecorder {
       this.isRecording = false
     })
   }
+
+      cancelRecording(): void {
+      if (this.mediaRecorder && this.isRecording) {
+         this.mediaRecorder.stop(); // Detiene la grabación
+      // Llamamos a cleanup para liberar el micrófono y limpiar todo
+      this.cleanup();
+      console.log('Recording cancelled.');
+      }
+      }
+
 
   private cleanup(): void {
     if (this.stream) {
