@@ -155,7 +155,7 @@ export default function GrabacionConversacion({
       const result = await audioRecorder.stop();
       setIsRecording(false);
       setIsPaused(false);
-      setRecordedAudio(result);
+      setRecordedAudio({ blob: result, metadata: {} });
       
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
