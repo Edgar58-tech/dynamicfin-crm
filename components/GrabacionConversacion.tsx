@@ -174,13 +174,13 @@ export default function GrabacionConversacion({
     if (!audioRecorder || !isRecording) return;
 
     if (isPaused) {
-      audioRecorder.resumeRecording();
+      udioRecorder.resume();
       intervalRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
       toast.success('⏯️ Grabación reanudada');
     } else {
-      audioRecorder.pauseRecording();
+      audioRecorder.pause();
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
