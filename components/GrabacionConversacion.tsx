@@ -152,7 +152,7 @@ export default function GrabacionConversacion({
     try {
       if (!audioRecorder || !isRecording) return;
 
-      const result = await audioRecorder.stopRecording();
+      const result = await audioRecorder.stop();
       setIsRecording(false);
       setIsPaused(false);
       setRecordedAudio(result);
