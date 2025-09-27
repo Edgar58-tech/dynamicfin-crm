@@ -174,7 +174,7 @@ export default function GrabacionConversacion({
     if (!audioRecorder || !isRecording) return;
 
     if (isPaused) {
-      udioRecorder.resume();
+      audioRecorder.resume();
       intervalRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
