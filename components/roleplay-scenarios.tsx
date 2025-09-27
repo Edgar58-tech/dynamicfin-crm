@@ -1,3 +1,4 @@
+
 'use client';
 import { RolePlayScenario } from '@prisma/client';
 import { useState, useEffect } from 'react';
@@ -34,9 +35,8 @@ import toast from 'react-hot-toast';
 // Importar datos de prueba
 import { roleplayScenarios, CATEGORIAS_ROLEPLAY, NIVELES_DIFICULTAD_ROLEPLAY, TIPOS_CLIENTE_AUTOMOTRIZ } from '@/app/roleplay-test/roleplayData';
 
-// DESPUÉS (solución definitiva)
-import { RolePlayScenario } from '@prisma/client';
-type Scenario = RolePlayScenario;    // ✅ 100% compatible
+// Ya no necesitamos interface manual - usaremos el tipo de Prisma directamente
+type Scenario = RolePlayScenario;
 
 interface RolePlayScenariosProps {
   onSelectScenario?: (scenario: Scenario) => void;
@@ -207,11 +207,41 @@ export default function RolePlayScenarios({
   };
 
   const resetForm = () => {
-    // Lógica para resetear formulario...
+    setFormData({
+      titulo: '',
+      descripcion: '',
+      categoria: '',
+      nivelDificultad: 'medio',
+      tipoCliente: '',
+      vehiculoInteres: '',
+      presupuestoCliente: '',
+      duracionEstimada: 15,
+      objetivosAprendizaje: '',
+      objecionesComunes: '',
+      contextoPreventa: '',
+      etiquetas: ''
+    });
   };
 
   const startEdit = (scenario: Scenario) => {
-    // Lógica para empezar a editar...
+    setEditingScenario(scenario);
+    setFormData({
+      titulo: scenario.titulo,
+      descripcion: scenario.descripcion,
+      categoria: scenario.categoria,
+      nivelDificultad: scenario.nivelDificultad,
+      tipoCliente: scenario.tipoCliente,
+      vehiculoInteres: scenario.vehiculoInteres || '',
+      presupuestoCliente: scenario.presupuestoCliente ? scenario.presupuestoCliente.toString() : '',
+      duracionEstimada: scenario.duracionEstimada,
+      objetivosAprendizaje: scenario.objetivosAprendizaje,
+      objecionesComunes: scenario.objecionesComunes,
+      contextoPreventa: scenario.contextoPreventa || '',
+      etiquetas: Array.isArray(scenario.etiquetas) 
+        ? scenario.etiquetas.join(', ') 
+        : scenario.etiquetas || ''
+    });
+    setShowCreateDialog(true);
   };
 
   const filteredScenarios = scenarios.filter(scenario =>
@@ -221,15 +251,31 @@ export default function RolePlayScenarios({
   );
 
   const getDifficultyIcon = (nivel: string) => {
-    // Lógica de íconos...
+    switch (nivel.toLowerCase()) {
+      case 'principiante': return <Target className="w-4 h-4 text-green-600" />;
+      case 'medio': return <TrendingUp className="w-4 h-4 text-yellow-600" />;
+      case 'avanzado': return <Award className="w-4 h-4 text-red-600" />;
+      case 'experto': return <Brain className="w-4 h-4 text-purple-600" />;
+      default: return <Target className="w-4 h-4 text-slate-600" />;
+    }
   };
 
   const getCategoryIcon = (categoria: string) => {
-    // Lógica de íconos...
+    switch (categoria.toLowerCase()) {
+      case 'prospección': return <Users className="w-4 h-4" />;
+      case 'calificación': return <CheckCircle className="w-4 h-4" />;
+      case 'presentación': return <BookOpen className="w-4 h-4" />;
+      case 'manejo_objeciones': return <AlertTriangle className="w-4 h-4" />;
+      case 'cierre': return <Star className="w-4 h-4" />;
+      default: return <BookOpen className="w-4 h-4" />;
+    }
   };
   
-  const getScoreColor = (score: number) => {
-    // Lógica de colores...
+  const getScoreColor = (score: number | undefined | null) => {
+    if (!score) return 'text-slate-400';
+    if (score >= 85) return 'text-green-600';
+    if (score >= 70) return 'text-yellow-600';
+    return 'text-red-600';
   };
 
   const canManageScenarios = ['GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_MARCA', 'DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'].includes(session?.user?.rol ?? '');
@@ -466,7 +512,168 @@ export default function RolePlayScenarios({
           </SelectContent>
         </Select>
       </div>
-      {/* ... (Resto del JSX que no necesita cambios) ... */}
+
+      {/* Grid de Escenarios */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredScenarios.map((scenario, index) => (
+          <motion.div
+            key={scenario.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1 }}
+          >
+            <Card className={`h-full transition-all duration-200 hover:shadow-lg cursor-pointer ${
+              selectedScenario?.id === scenario.id 
+                ? 'ring-2 ring-blue-500 bg-blue-50' 
+                : 'hover:shadow-md'
+            }`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    {getCategoryIcon(scenario.categoria)}
+                    <Badge variant="outline" className="text-xs">
+                      {scenario.categoria.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getDifficultyIcon(scenario.nivelDificultad)}
+                    {showManagement && canManageScenarios && (
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEdit(scenario);
+                          }}
+                        >
+                          <Edit className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteScenario(scenario.id);
+                          }}
+                        >
+                          <Trash2 className="w-3 h-3 text-red-500" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <CardTitle className="text-lg leading-tight line-clamp-2">
+                  {scenario.titulo}
+                </CardTitle>
+                
+                <CardDescription className="line-clamp-3 text-sm">
+                  {scenario.descripcion}
+                </CardDescription>
+              </CardHeader>
+              
+              <CardContent className="pt-0">
+                <div className="space-y-3">
+                  {/* Información del Cliente */}
+                  <div className="flex items-center gap-2 text-sm">
+                    <Users className="w-4 h-4 text-slate-500" />
+                    <span className="font-medium text-slate-700">
+                      {scenario.tipoCliente.replace('_', ' ')}
+                    </span>
+                  </div>
+                  
+                  {/* Duración y Dificultad */}
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-4 h-4 text-slate-500" />
+                      <span>{scenario.duracionEstimada} min</span>
+                    </div>
+                    <Badge 
+                      variant={scenario.nivelDificultad === 'principiante' ? 'default' : 
+                               scenario.nivelDificultad === 'medio' ? 'secondary' : 'destructive'}
+                      className="text-xs"
+                    >
+                      {scenario.nivelDificultad}
+                    </Badge>
+                  </div>
+                  
+                  {/* Estadísticas */}
+                  {(scenario.completadoVeces > 0 || scenario.puntuacionPromedio) && (
+                    <div className="flex items-center justify-between text-sm border-t pt-2">
+                      <div className="flex items-center gap-1">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span>{scenario.completadoVeces} completadas</span>
+                      </div>
+                      {scenario.puntuacionPromedio && (
+                        <div className="flex items-center gap-1">
+                          <Star className="w-4 h-4 text-yellow-500" />
+                          <span className={`font-medium ${getScoreColor(Number(scenario.puntuacionPromedio))}`}>
+                            {Math.round(Number(scenario.puntuacionPromedio))}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Vehículo de Interés */}
+                  {scenario.vehiculoInteres && (
+                    <div className="flex items-center gap-1 text-sm">
+                      <span className="text-slate-600">Vehículo:</span>
+                      <Badge variant="outline" className="text-xs">
+                        {scenario.vehiculoInteres}
+                      </Badge>
+                    </div>
+                  )}
+                  
+                  {/* Botones de Acción */}
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 gap-1"
+                      onClick={() => onSelectScenario?.(scenario)}
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      Ver Detalles
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="flex-1 gap-1"
+                      onClick={() => onStartSimulation?.(scenario)}
+                    >
+                      <Play className="w-4 h-4" />
+                      Iniciar
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Estado vacío */}
+      {filteredScenarios.length === 0 && !loading && (
+        <div className="text-center py-12">
+          <BookOpen className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-slate-600 mb-2">
+            No se encontraron escenarios
+          </h3>
+          <p className="text-slate-500 mb-4">
+            Prueba ajustando los filtros o creando un nuevo escenario
+          </p>
+          {showManagement && canManageScenarios && (
+            <Button
+              onClick={() => setShowCreateDialog(true)}
+              className="gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Crear Primer Escenario
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
