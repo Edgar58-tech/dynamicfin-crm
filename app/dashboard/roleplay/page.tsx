@@ -34,6 +34,14 @@ import RolePlaySimulator from '@/components/roleplay-simulator';
 import RolePlayScenarios from '@/components/roleplay-scenarios';
 // import { redirect } from 'next/navigation';
 
+interface EscenariosPorCategoria {
+  [categoria: string]: {
+    completadas: number;
+    total: number;
+    puntuacionPromedio: number;
+  };
+}
+
 interface Progress {
   totalSesiones: number;
   sesionesCompletadas: number;
@@ -44,7 +52,7 @@ interface Progress {
   puntosGameficacion: number;
   badges: string[];
   mejoraGeneral: number;
-  escenariosPorCategoria: any;
+  escenariosPorCategoria: EscenariosPorCategoria;
 }
 
 interface RecentSession {
@@ -103,18 +111,22 @@ export default function RolePlayPage() {
     }
   };
 
-  const handleScenarioSelect = (scenario: any) => {
+  const handleScenarioSelect = (scenario: Scenario) => {
     setSelectedScenario(scenario);
     setActiveTab('simulador');
   };
 
-  const handleStartSimulation = (scenario: any) => {
+  const handleStartSimulation = (scenario: Scenario) => {
     setSelectedScenario(scenario);
     setActiveTab('simulador');
     toast.success(`Iniciando simulación: ${scenario.titulo}`);
   };
 
-  const handleSessionComplete = (sessionData: any) => {
+  const handleSessionComplete = (sessionData: { 
+    sessionId: number; 
+    score: number; 
+    duration: number; 
+  }) => {
     // Refrescar datos después de completar sesión
     fetchProgress();
     fetchRecentSessions();
@@ -443,7 +455,7 @@ export default function RolePlayPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {Object.entries(progress.escenariosPorCategoria || {}).map(([categoria, data]: [string, any]) => (
+                    {Object.entries(progress.escenariosPorCategoria || {}).map(([categoria, data]) => (
                       <div key={categoria} className="space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-medium capitalize">

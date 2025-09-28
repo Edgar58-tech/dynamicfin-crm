@@ -223,6 +223,53 @@ model Pilar {
   @@map("pilares")
 }
 
+// Alias for compatibility with existing imports
+model SPCCPilar {
+  id                Int      @id @default(autoincrement())
+  nombrePilar       String
+  descripcion       String?
+  pesoEstrategico   Decimal  @db.Decimal(5, 4)
+  faseEvaluacion    Int
+  activo            Boolean  @default(true)
+  
+  evaluaciones      SPCCEvaluacion[]
+  
+  @@map("spcc_pilares")
+}
+
+// SPCC Evaluations
+model SPCCEvaluacion {
+  id               Int      @id @default(autoincrement())
+  prospectoId      Int
+  pilarId          Int
+  puntajeObtenido  Int      @default(0)
+  notas            String?
+  fechaEvaluacion  DateTime @default(now())
+  evaluadoPor      String?  // ID del vendedor que evaluó
+  updatedAt        DateTime @updatedAt
+  
+  pilar            SPCCPilar @relation(fields: [pilarId], references: [id])
+  
+  @@unique([prospectoId, pilarId])
+  @@map("spcc_evaluaciones")
+}
+
+// Grabaciones (alias for GrabacionConversacion for compatibility)
+model Grabacion {
+  id                Int      @id @default(autoincrement())
+  prospectoId       Int
+  vendedorId        String
+  tipoLlamada       String
+  duracion          Int
+  rutaArchivo       String?
+  transcripcion     String?  @db.Text
+  analisisIA        String?  @db.Text
+  fechaGrabacion    DateTime @default(now())
+  procesado         Boolean  @default(false)
+  
+  @@map("grabaciones_alias")
+}
+
 model Prospecto {
   id                 Int       @id @default(autoincrement())
   nombre             String
@@ -251,6 +298,10 @@ model Prospecto {
   nivelUrgencia      String    @default("MEDIA") // "BAJA", "MEDIA", "ALTA"
   tiempoEsperado     String?   // "INMEDIATO", "1_SEMANA", "1_MES", "FLEXIBLE"
   acompanantes       String?   // "SOLO", "PAREJA", "FAMILIA", "AMIGOS"
+  
+  // Campos adicionales para compatibilidad
+  score              Int?      @default(0)  // Score del prospecto
+  estadoLead         String?   // Estado del lead para compatibilidad
   
   vendedor           User?           @relation("ProspectosVendedor", fields: [vendedorId], references: [id])
   coordinador        User?           @relation("ProspectosCoordinador", fields: [coordinadorId], references: [id])
@@ -1025,6 +1076,127 @@ model CrmMetrics {
   @@unique([crmConfigurationId, fecha])
   @@index([fecha])
   @@map("crm_metrics")
+}
+
+// ================== SISTEMAS DE MONITOREO Y TESTING ==================
+
+// Sistema de monitoreo y alertas
+model MonitoringAlert {
+  id              Int      @id @default(autoincrement())
+  tipoAlerta      String   // "performance", "error", "warning", "info"
+  mensaje         String   @db.Text
+  componente      String?  // Componente afectado
+  severidad       Int      @default(1) // 1-5
+  estado          String   @default("ACTIVA") // "ACTIVA", "RESUELTA", "IGNORADA"
+  fechaCreacion   DateTime @default(now())
+  fechaResolucion DateTime?
+  observaciones   String?  @db.Text
+  
+  @@map("monitoring_alerts")
+}
+
+// Ejecución de tests automáticos
+model TestExecution {
+  id              Int      @id @default(autoincrement())
+  nombreTest      String
+  tipoTest        String   // "unit", "integration", "e2e", "performance"
+  resultado       String   // "exitoso", "fallido", "omitido"
+  duracion        Int?     // millisegundos
+  mensaje         String?  @db.Text
+  fechaEjecucion  DateTime @default(now())
+  
+  resultados      TestResult[]
+  
+  @@map("test_executions")
+}
+
+// Resultados detallados de tests
+model TestResult {
+  id              Int      @id @default(autoincrement())
+  testExecutionId Int
+  nombrePrueba    String
+  estado          String   // "pass", "fail", "skip"
+  mensaje         String?  @db.Text
+  stackTrace      String?  @db.Text
+  tiempoEjecucion Int?     // millisegundos
+  
+  testExecution   TestExecution @relation(fields: [testExecutionId], references: [id])
+  
+  @@map("test_results")
+}
+
+// Alertas de monitoreo del sistema
+model AlertaMonitoreo {
+  id             Int      @id @default(autoincrement())
+  tipoAlerta     String   // "cpu_alto", "memoria_alta", "error_bd", "api_lenta"
+  descripcion    String   @db.Text
+  severidad      String   // "baja", "media", "alta", "critica"
+  componente     String   // "database", "api", "frontend", "system"
+  valorMedido    Decimal? @db.Decimal(10, 3) // Valor que activó la alerta
+  umbral         Decimal? @db.Decimal(10, 3) // Umbral configurado
+  estado         String   @default("ACTIVA") // "ACTIVA", "RECONOCIDA", "RESUELTA"
+  fechaDeteccion DateTime @default(now())
+  fechaResolucion DateTime?
+  observaciones  String?  @db.Text
+  
+  @@map("alertas_monitoreo")
+}
+
+// Métricas de monitoreo
+model MonitoringMetric {
+  id           Int      @id @default(autoincrement())
+  nombre       String
+  valor        Decimal  @db.Decimal(15, 6)
+  unidad       String?  // "ms", "%", "MB", "count"
+  categoria    String   // "performance", "usage", "error", "business"
+  componente   String   // "database", "api", "frontend"
+  timestamp    DateTime @default(now())
+  metadatos    String?  @db.Text // JSON con metadatos adicionales
+  
+  @@index([nombre, timestamp])
+  @@index([categoria, timestamp])
+  @@map("monitoring_metrics")
+}
+
+// Configuraciones de proximidad (alias para compatibilidad)
+model ProximityConfiguration {
+  id                Int      @id @default(autoincrement())
+  vendedorId        String
+  activo            Boolean  @default(true)
+  radioMetros       Int      @default(50)
+  configuracion     String?  @db.Text // JSON con configuraciones
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("proximity_configurations")
+}
+
+// Detecciones de proximidad
+model ProximityDetection {
+  id              Int      @id @default(autoincrement())
+  vendedorId      String
+  latitud         Decimal  @db.Decimal(10, 8)
+  longitud        Decimal  @db.Decimal(11, 8)
+  timestamp       DateTime @default(now())
+  precision       Decimal? @db.Decimal(8, 3)
+  enZona          Boolean  @default(false)
+  
+  @@map("proximity_detections")
+}
+
+// Grabaciones automáticas por proximidad
+model AutoRecording {
+  id              Int      @id @default(autoincrement())
+  vendedorId      String
+  prospectoId     Int?
+  inicioAutomatico Boolean @default(true)
+  estado          String   // "iniciada", "en_curso", "completada", "fallida"
+  duracion        Int?     // segundos
+  rutaArchivo     String?
+  fechaInicio     DateTime @default(now())
+  fechaFin        DateTime?
+  
+  @@map("auto_recordings")
 }
 
 // ================== SISTEMA DE GRABACIÓN POR PROXIMIDAD ==================

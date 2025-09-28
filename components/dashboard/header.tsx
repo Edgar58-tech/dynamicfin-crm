@@ -58,11 +58,12 @@ export function Header() {
   const getContextInfo = () => {
     if (!session?.user) return '';
     
-    const { agencia, marca, grupo } = session.user;
+    // TODO: Implement with proper relations
+    const { agenciaId, marcaId, grupoId } = session.user;
     
-    if (agencia) return `${agencia.nombreAgencia} - ${marca?.nombreMarca}`;
-    if (marca) return `${marca.nombreMarca} - ${grupo?.nombreGrupo}`;
-    if (grupo) return grupo.nombreGrupo;
+    if (agenciaId) return `Agencia ID: ${agenciaId}`;
+    if (marcaId) return `Marca ID: ${marcaId}`;
+    if (grupoId) return `Grupo ID: ${grupoId}`;
     
     return 'Sistema Global';
   };

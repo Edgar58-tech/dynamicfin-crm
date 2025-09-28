@@ -101,7 +101,7 @@ export class AudioRecorder {
         this.cleanup()
         resolve(audioBlob)
       }
-      
+
       this.mediaRecorder.onerror = (event) => {
         this.cleanup()
         reject(new Error('Recording error: ' + (event as any).error?.message))
@@ -111,16 +111,6 @@ export class AudioRecorder {
       this.isRecording = false
     })
   }
-
-      cancelRecording(): void {
-      if (this.mediaRecorder && this.isRecording) {
-         this.mediaRecorder.stop(); // Detiene la grabación
-      // Llamamos a cleanup para liberar el micrófono y limpiar todo
-      this.cleanup();
-      console.log('Recording cancelled.');
-      }
-      }
-
 
   private cleanup(): void {
     if (this.stream) {
@@ -139,6 +129,31 @@ export class AudioRecorder {
 
   isActive(): boolean {
     return this.isRecording
+  }
+
+  // Convenience methods for backward compatibility
+  async startRecording(): Promise<void> {
+    await this.initialize()
+    this.start()
+  }
+
+  async stopRecording(): Promise<Blob> {
+    return this.stop()
+  }
+
+  cancelRecording(): void {
+    if (this.mediaRecorder && this.isRecording) {
+      this.mediaRecorder.stop()
+      this.cleanup()
+    }
+  }
+
+  pauseRecording(): void {
+    this.pause()
+  }
+
+  resumeRecording(): void {
+    this.resume()
   }
 }
 
@@ -222,27 +237,47 @@ export function audioBlobToBase64(blob: Blob): Promise<string> {
   })
 }
 
-export function checkAudioSupport(): boolean {
-  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+// Utility functions
+interface AudioSupportResult {
+  supported: boolean;
+  errors: string[];
+}
+
+export function checkAudioSupport(): AudioSupportResult {
+  const errors: string[] = [];
+  let supported = true;
+
+  if (!navigator.mediaDevices) {
+    errors.push('MediaDevices API not supported');
+    supported = false;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    errors.push('getUserMedia not supported');
+    supported = false;
+  }
+
+  if (typeof MediaRecorder === 'undefined') {
+    errors.push('MediaRecorder API not supported');
+    supported = false;
+  }
+
+  return { supported, errors };
 }
 
 export function formatDuration(seconds: number): string {
-  if (isNaN(seconds) || seconds < 0) {
-    return '0:00';
-  }
   const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  const secs = seconds % 60;
+  return `${minutes}:${secs.toString().padStart(2, '0')}`;
 }
 
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 // Export default class
-export default AudioRecorder
-der
+export default AudioRecorder;

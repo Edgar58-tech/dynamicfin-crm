@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RolePlayScenario } from '@prisma/client';
+import type { RolePlayScenario } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 
 import { 
@@ -62,9 +62,9 @@ interface RecentSession {
 }
 
 export default function RolePlayPage() {
-const { data: session, status } = useSession() || {};
-// const session = null;
-// const status = 'unauthenticated';
+  const { data: session, status } = useSession() || {};
+  // const session = null;
+  // const status = 'unauthenticated';
   const [activeTab, setActiveTab] = useState('simulador');
   const [selectedScenario, setSelectedScenario] = useState<RolePlayScenario | undefined>(undefined);
   const [progress, setProgress] = useState<Progress | null>(null);

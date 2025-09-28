@@ -47,7 +47,7 @@ interface Zona {
 }
 
 export default function ZoneManagement() {
-  const { data: session } = useSession();
+  const { data: session } = useSession() || {};
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -8,7 +8,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { PrismaClient } from '@prisma/client';
 import { Prisma } from '@prisma/client';
-import { ZonaProximidad } from '@prisma/client';
+import type { ZonaProximidad } from '@prisma/client';
 
 const prisma = new PrismaClient();
 

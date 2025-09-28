@@ -7,9 +7,9 @@ import { Providers } from '@/components/providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'DynamicFin Optimization Suite',
-  description: 'Sistema Integral de Ventas Automotrices - Plataforma de Optimización',
-  keywords: 'automotive, sales, optimization, CRM, SPPC',
+  title: 'DynamicFin CRM - Sistema Integral',
+  description: 'Sistema Integral de Ventas Automotrices con Monitoreo y Testing - Plataforma de Optimización',
+  keywords: 'automotive, sales, optimization, CRM, SPPC, monitoring, testing',
   authors: [{ name: 'DynamicFin' }],
 };
 

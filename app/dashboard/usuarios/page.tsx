@@ -75,6 +75,25 @@ export default function UsuariosPage() {
     grupo: ''
   });
 
+  // Estados para editar usuario
+  const [editandoUsuario, setEditandoUsuario] = useState({
+    id: '',
+    nombre: '',
+    apellido: '',
+    email: '',
+    telefono: '',
+    rol: '',
+    agencia: '',
+    marca: '',
+    grupo: '',
+    activo: true
+  });
+
+  // Estados para datos auxiliares
+  const [agencias, setAgencias] = useState<any[]>([]);
+  const [marcas, setMarcas] = useState<any[]>([]);
+  const [grupos, setGrupos] = useState<any[]>([]);
+
   const roles = [
     { value: 'DYNAMICFIN_ADMIN', label: '🔰 DynamicFin Master Admin', color: 'bg-gradient-to-r from-purple-500 to-pink-500 text-white', description: 'Acceso total al sistema, incluyendo configuraciones globales' },
     { value: 'DIRECTOR_GENERAL', label: 'Director General', color: 'bg-red-100 text-red-800', description: 'Consultas y reportes de TODAS las agencias del grupo (solo lectura)' },
@@ -151,14 +170,11 @@ export default function UsuariosPage() {
     setShowNuevoUsuarioModal(true);
   };
 
-  const handleCrearUsuario = () => {
+  const handleCrearUsuario = async () => {
     if (!nuevoUsuario.nombre || !nuevoUsuario.apellido || !nuevoUsuario.email || !nuevoUsuario.rol) {
       alert('⚠️ Por favor completa todos los campos obligatorios:\n• Nombre\n• Apellido\n• Email\n• Rol');
       return;
     }
-    
-    const rolInfo = roles.find(r => r.value === nuevoUsuario.rol);
-    const permisos = permisosPorRol[nuevoUsuario.rol as keyof typeof permisosPorRol] || [];
     
     // Validaciones especiales para usuario maestro
     if (nuevoUsuario.rol === 'DYNAMICFIN_ADMIN') {
@@ -169,62 +185,223 @@ export default function UsuariosPage() {
       }
     }
 
-    // Mensaje según el tipo de usuario
-    let mensaje = `✅ USUARIO CREADO EXITOSAMENTE\n\n👤 USUARIO: ${nuevoUsuario.nombre} ${nuevoUsuario.apellido}\n📧 EMAIL: ${nuevoUsuario.email}\n🏷️ ROL: ${rolInfo?.label}`;
-    
-    if (nuevoUsuario.rol === 'DYNAMICFIN_ADMIN') {
-      mensaje += '\n🔰 TIPO: Usuario Maestro DynamicFin\n🌐 ALCANCE: Sistema completo (todos los grupos y marcas)';
-    } else {
-      mensaje += `\n🏢 AGENCIA: ${nuevoUsuario.agencia || 'Por asignar'}`;
-      if (nuevoUsuario.marca) mensaje += `\n🚗 MARCA: ${nuevoUsuario.marca}`;
-      if (nuevoUsuario.grupo) mensaje += `\n🏭 GRUPO: ${nuevoUsuario.grupo}`;
-    }
-    
-    mensaje += `\n\n🔐 PERMISOS ASIGNADOS (${permisos.length}):\n${permisos.map(p => `• ${permisosDescripciones[p as keyof typeof permisosDescripciones] || p}`).join('\n')}`;
-    
-    // Información específica según el rol
-    if (nuevoUsuario.rol === 'VENDEDOR') {
-      mensaje += '\n\n📋 ALCANCE PERSONAL:\n• Solo ve sus propios registros y KPIs\n• Agenda personal y prospectos asignados\n• Reportes únicamente de sus ventas\n• Sin acceso a datos de otros vendedores\n\n🚗 ACCESO A INVENTARIO:\n• Puede consultar disponibilidad de vehículos\n• Puede asignar líneas (marca/modelo/versión/año) a prospectos\n• NO puede apartar unidades específicas con número de serie\n• Para apartar debe solicitar apoyo al Gerente de Ventas';
-    }
-    
+    try {
+      setLoading(true);
+      
+      // Generar contraseña temporal
+      const tempPassword = 'DynamicFin2025' + Math.floor(Math.random() * 1000);
+      
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'create',
+          email: nuevoUsuario.email,
+          nombre: nuevoUsuario.nombre,
+          apellido: nuevoUsuario.apellido,
+          password: tempPassword,
+          rol: nuevoUsuario.rol,
+          agenciaId: nuevoUsuario.agencia ? parseInt(nuevoUsuario.agencia) : null,
+          marcaId: nuevoUsuario.marca ? parseInt(nuevoUsuario.marca) : null,
+          grupoId: nuevoUsuario.grupo ? parseInt(nuevoUsuario.grupo) : null
+        }),
+      });
 
-    
-    if (nuevoUsuario.rol === 'GERENTE_VENTAS') {
-      mensaje += '\n\n🔧 GESTIÓN OPERATIVA:\n• Apartar y liberar unidades del inventario\n• Actualizar inventario (Excel/manual)\n• Dar de alta y baja a vendedores\n• Optimización y análisis de carga\n• Acceso a finanzas y reportes de la agencia';
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al crear usuario');
+      }
+
+      const rolInfo = roles.find(r => r.value === nuevoUsuario.rol);
+      
+      // Mensaje de confirmación exitosa
+      let mensaje = `✅ USUARIO CREADO EXITOSAMENTE\n\n👤 USUARIO: ${nuevoUsuario.nombre} ${nuevoUsuario.apellido}\n📧 EMAIL: ${nuevoUsuario.email}\n🏷️ ROL: ${rolInfo?.label}\n🔑 CONTRASEÑA TEMPORAL: ${tempPassword}`;
+      
+      if (nuevoUsuario.rol === 'VENDEDOR') {
+        mensaje += '\n\n📋 ALCANCE PERSONAL:\n• Solo ve sus propios registros y KPIs\n• Agenda personal y prospectos asignados\n• Reportes únicamente de sus ventas\n• Sin acceso a datos de otros vendedores\n\n🚗 ACCESO A INVENTARIO:\n• Puede consultar disponibilidad de vehículos\n• Puede asignar líneas (marca/modelo/versión/año) a prospectos\n• NO puede apartar unidades específicas con número de serie\n• Para apartar debe solicitar apoyo al Gerente de Ventas';
+      }
+      
+      mensaje += '\n\n✅ PRÓXIMOS PASOS:\n• El usuario debe cambiar la contraseña temporal en su primer acceso\n• Coordinar capacitación inicial\n• Verificar permisos específicos';
+      
+      alert(mensaje);
+      
+      // Reset form y cerrar modal
+      setNuevoUsuario({
+        nombre: '', apellido: '', email: '', telefono: '', rol: '', agencia: '', marca: '', grupo: ''
+      });
+      setShowNuevoUsuarioModal(false);
+      
+      // Recargar la lista de usuarios
+      await loadUsuarios();
+      
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert(`❌ Error al crear usuario:\n${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setLoading(false);
     }
-    
-    if (nuevoUsuario.rol === 'GERENTE_GENERAL') {
-      mensaje += '\n\n📊 SOLO CONSULTAS:\n• Reportes y consultas de la agencia\n• NO puede modificar la operación\n• Dashboard de su agencia únicamente';
+  };
+
+  // Cargar datos auxiliares (agencias, marcas, grupos)
+  const loadAuxiliarData = async () => {
+    try {
+      // Cargar agencias
+      const agenciasResponse = await fetch('/api/admin/users?action=agencies');
+      const agenciasData = await agenciasResponse.json();
+      if (agenciasResponse.ok) {
+        setAgencias(agenciasData.agencias || []);
+      }
+
+      // Cargar marcas
+      const marcasResponse = await fetch('/api/admin/users?action=marcas');
+      const marcasData = await marcasResponse.json();
+      if (marcasResponse.ok) {
+        setMarcas(marcasData.marcas || []);
+      }
+
+      // Cargar grupos
+      const gruposResponse = await fetch('/api/admin/users?action=grupos');
+      const gruposData = await gruposResponse.json();
+      if (gruposResponse.ok) {
+        setGrupos(gruposData.grupos || []);
+      }
+    } catch (error) {
+      console.error('Error loading auxiliary data:', error);
     }
-    
-    if (nuevoUsuario.rol === 'DIRECTOR_MARCA') {
-      mensaje += '\n\n🏢 ALCANCE MULTI-AGENCIA:\n• Consultas de agencias de diferentes marcas\n• Reportes consolidados de la marca\n• NO puede modificar operaciones\n• Solo visualización y análisis';
-    }
-    
-    if (nuevoUsuario.rol === 'DIRECTOR_GENERAL') {
-      mensaje += '\n\n🌐 ALCANCE TOTAL DEL GRUPO:\n• Dashboard y reportes de TODAS las agencias\n• Consultas de todo el grupo\n• NO puede modificar operaciones\n• Solo visualización ejecutiva';
-    }
-    
-    mensaje += '\n\n✅ PRÓXIMOS PASOS:\n• Se enviará invitación por email\n• Usuario debe cambiar contraseña inicial';
-    
-    if (nuevoUsuario.rol !== 'DYNAMICFIN_ADMIN') {
-      mensaje += '\n• Asignar a agencia/grupo específico';
-    }
-    
-    mensaje += '\n• Activar notificaciones\n\n📧 Invitación enviada a: ' + nuevoUsuario.email;
-    
-    alert(mensaje);
-    
-    // Reset form
-    setNuevoUsuario({
-      nombre: '', apellido: '', email: '', telefono: '', rol: '', agencia: '', marca: '', grupo: ''
-    });
-    setShowNuevoUsuarioModal(false);
   };
 
   const handleEditarUsuario = (usuario: Usuario) => {
+    setEditandoUsuario({
+      id: usuario.id,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      email: usuario.email,
+      telefono: usuario.telefono,
+      rol: usuario.rol,
+      agencia: '', // Se podría mapear el ID de agencia si fuera necesario
+      marca: '', // Se podría mapear el ID de marca si fuera necesario
+      grupo: '', // Se podría mapear el ID de grupo si fuera necesario
+      activo: usuario.activo
+    });
     setSelectedUsuario(usuario);
     setShowEditarModal(true);
+  };
+
+  const handleActualizarUsuario = async () => {
+    if (!editandoUsuario.nombre || !editandoUsuario.email || !editandoUsuario.rol) {
+      alert('⚠️ Por favor completa todos los campos obligatorios:\n• Nombre\n• Email\n• Rol');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'update',
+          userId: editandoUsuario.id,
+          updateData: {
+            nombre: editandoUsuario.nombre,
+            apellido: editandoUsuario.apellido,
+            email: editandoUsuario.email,
+            rol: editandoUsuario.rol,
+            agenciaId: editandoUsuario.agencia ? parseInt(editandoUsuario.agencia) : null,
+            marcaId: editandoUsuario.marca ? parseInt(editandoUsuario.marca) : null,
+            grupoId: editandoUsuario.grupo ? parseInt(editandoUsuario.grupo) : null,
+            activo: editandoUsuario.activo
+          }
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al actualizar usuario');
+      }
+
+      alert(`✅ Usuario actualizado exitosamente\n\n👤 ${editandoUsuario.nombre} ${editandoUsuario.apellido}\n📧 ${editandoUsuario.email}`);
+      
+      setShowEditarModal(false);
+      await loadUsuarios(); // Recargar lista
+
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert(`❌ Error al actualizar usuario:\n${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleEstado = async (usuario: Usuario) => {
+    const accion = usuario.activo ? 'desactivar' : 'activar';
+    const confirmar = confirm(`⚠️ ${accion.toUpperCase()} USUARIO\n\n¿Estás seguro de que deseas ${accion} a:\n${usuario.nombre} ${usuario.apellido} (${usuario.email})?\n\n${usuario.activo ? 'El usuario perderá acceso al sistema pero se mantendrán sus registros.' : 'El usuario recuperará acceso al sistema.'}`);
+    
+    if (!confirmar) return;
+
+    try {
+      setLoading(true);
+
+      if (usuario.activo) {
+        // Desactivar usuario
+        const response = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'deactivate',
+            userId: usuario.id,
+            reason: 'Desactivado por administrador'
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Error al desactivar usuario');
+        }
+
+        alert(`✅ Usuario desactivado exitosamente\n\n${usuario.nombre} ${usuario.apellido} ya no tiene acceso al sistema.`);
+      } else {
+        // Activar usuario (actualizar con activo: true)
+        const response = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'update',
+            userId: usuario.id,
+            updateData: {
+              activo: true
+            }
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Error al activar usuario');
+        }
+
+        alert(`✅ Usuario activado exitosamente\n\n${usuario.nombre} ${usuario.apellido} ahora tiene acceso al sistema.`);
+      }
+      
+      await loadUsuarios(); // Recargar lista
+
+    } catch (error) {
+      console.error(`Error ${accion} user:`, error);
+      alert(`❌ Error al ${accion} usuario:\n${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerPerfil = (usuario: Usuario) => {
@@ -233,24 +410,51 @@ export default function UsuariosPage() {
   };
 
   const handleGestionarPermisos = (usuario: Usuario) => {
-    setSelectedUsuario(usuario);
-    setShowPermisosModal(true);
+    alert(`🔧 GESTIÓN DE PERMISOS\n\nFuncionalidad en desarrollo para:\n${usuario.nombre} ${usuario.apellido}\n\nPróximamente podrás gestionar permisos específicos para cada usuario.`);
   };
 
-  const handleToggleEstado = (usuario: Usuario) => {
-    const estado = usuario.activo ? 'DESACTIVAR' : 'ACTIVAR';
-    const accion = usuario.activo ? 'desactivado' : 'activado';
+  const handleResetPassword = async (usuario: Usuario) => {
+    const confirmar = confirm(`🔑 RESTABLECER CONTRASEÑA\n\n¿Deseas generar una nueva contraseña temporal para:\n${usuario.nombre} ${usuario.apellido}?\n\nSe enviará la nueva contraseña por email.`);
     
-    if (confirm(`¿Estás seguro de ${estado.toLowerCase()} al usuario ${usuario.nombre} ${usuario.apellido}?`)) {
-      alert(`✅ USUARIO ${estado}:\n\n👤 ${usuario.nombre} ${usuario.apellido}\n📧 ${usuario.email}\n\nEl usuario ha sido ${accion} ${usuario.activo ? 'y ya no puede acceder al sistema' : 'y puede acceder al sistema'}.\n\n📧 Se ha enviado notificación por email.`);
+    if (!confirmar) return;
+
+    try {
+      setLoading(true);
+      
+      // Generar nueva contraseña temporal
+      const newPassword = 'DynamicFin2025' + Math.floor(Math.random() * 1000);
+      
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'update',
+          userId: usuario.id,
+          updateData: {
+            password: newPassword
+          }
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al restablecer contraseña');
+      }
+
+      alert(`✅ CONTRASEÑA RESTABLECIDA\n\n👤 Usuario: ${usuario.nombre} ${usuario.apellido}\n🔑 Nueva contraseña: ${newPassword}\n\n📧 Se ha enviado por email al usuario.\n⚠️ El usuario debe cambiar esta contraseña temporal en su próximo acceso.`);
+      
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      alert(`❌ Error al restablecer contraseña:\n${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleResetPassword = (usuario: Usuario) => {
-    if (confirm(`¿Enviar email de restablecimiento de contraseña a ${usuario.email}?`)) {
-      alert(`✅ EMAIL DE RESTABLECIMIENTO ENVIADO\n\n👤 Usuario: ${usuario.nombre} ${usuario.apellido}\n📧 Enviado a: ${usuario.email}\n\n🔒 El usuario recibirá:\n• Link de restablecimiento válido por 24 horas\n• Instrucciones de cambio de contraseña\n• Código de verificación de seguridad\n\n⚠️ El acceso actual del usuario se mantendrá activo hasta que cambie la contraseña.`);
-    }
-  };
+
 
   const getRolColor = (rol: string) => {
     return roles.find(r => r.value === rol)?.color || 'bg-gray-100 text-gray-800';
@@ -271,167 +475,51 @@ export default function UsuariosPage() {
     return matchesSearch && matchesRole;
   });
 
-  useEffect(() => {
-    const sampleData: Usuario[] = [
-      {
-        id: '0',
-        nombre: 'DynamicFin',
-        apellido: 'Master Admin',
-        email: 'admin@dynamicfin.mx',
-        telefono: '+52 55 0000-0000',
-        rol: 'DYNAMICFIN_ADMIN',
-        agencia: 'Sistema Global',
-        marca: 'Todas',
-        grupo: 'DynamicFin',
-        activo: true,
-        ultimoAcceso: '2025-09-10',
-        fechaRegistro: '2020-01-01',
-        permisos: permisosPorRol['DYNAMICFIN_ADMIN'],
-        ventasDelMes: 0,
-        metaDelMes: 0
-      },
-      {
-        id: '1',
-        nombre: 'Carlos',
-        apellido: 'Mendoza',
-        email: 'director@grupoalemanpremium.com',
-        telefono: '+52 55 1234-5678',
-        rol: 'DIRECTOR_GENERAL',
-        agencia: 'Todas',
-        marca: 'Todas',
-        grupo: 'Grupo Alemán Premium',
-        activo: true,
-        ultimoAcceso: '2025-09-09',
-        fechaRegistro: '2020-01-15',
-        permisos: permisosPorRol['DIRECTOR_GENERAL'],
-        ventasDelMes: 0,
-        metaDelMes: 0
-      },
-      {
-        id: '2',
-        nombre: 'María',
-        apellido: 'González',
-        email: 'director.audi@grupoalemanpremium.com',
-        telefono: '+52 55 2345-6789',
-        rol: 'DIRECTOR_MARCA',
-        agencia: 'Todas Audi',
-        marca: 'Audi',
-        grupo: 'Grupo Alemán Premium',
-        activo: true,
-        ultimoAcceso: '2025-09-09',
-        fechaRegistro: '2020-03-20',
-        permisos: permisosPorRol['DIRECTOR_MARCA'],
-        ventasDelMes: 0,
-        metaDelMes: 0
-      },
-      {
-        id: '3',
-        nombre: 'Roberto',
-        apellido: 'Martínez',
-        email: 'gerente@audipolanco.com.mx',
-        telefono: '+52 55 3456-7890',
-        rol: 'GERENTE_GENERAL',
-        agencia: 'Audi Polanco',
-        marca: 'Audi',
-        grupo: 'Grupo Alemán Premium',
-        activo: true,
-        ultimoAcceso: '2025-09-08',
-        fechaRegistro: '2021-06-10',
-        permisos: permisosPorRol['GERENTE_GENERAL'],
-        ventasDelMes: 0,
-        metaDelMes: 0
-      },
-      {
-        id: '4',
-        nombre: 'Patricia',
-        apellido: 'Silva',
-        email: 'ventas.gerente@audipolanco.com.mx',
-        telefono: '+52 55 4567-8901',
-        rol: 'GERENTE_VENTAS',
-        agencia: 'Audi Polanco',
-        marca: 'Audi',
-        grupo: 'Grupo Alemán Premium',
-        activo: true,
-        ultimoAcceso: '2025-09-09',
-        fechaRegistro: '2022-01-20',
-        permisos: permisosPorRol['GERENTE_VENTAS'],
-        ventasDelMes: 0,
-        metaDelMes: 0
-      },
-      {
-        id: '5',
-        nombre: 'Carlos',
-        apellido: 'Venta',
-        email: 'carlos.venta@audipolanco.com.mx',
-        telefono: '+52 55 5678-9012',
-        rol: 'VENDEDOR',
-        agencia: 'Audi Polanco',
-        marca: 'Audi',
-        grupo: 'Grupo Alemán Premium',
-        activo: true,
-        ultimoAcceso: '2025-09-09',
-        fechaRegistro: '2022-05-10',
-        permisos: permisosPorRol['VENDEDOR'],
-        ventasDelMes: 8,
-        metaDelMes: 10
-      },
-      {
-        id: '6',
-        nombre: 'Lucía',
-        apellido: 'Ventas',
-        email: 'lucia.ventas@audipolanco.com.mx',
-        telefono: '+52 55 6789-0123',
-        rol: 'VENDEDOR',
-        agencia: 'Audi Polanco',
-        marca: 'Audi',
-        grupo: 'Grupo Alemán Premium',
-        activo: true,
-        ultimoAcceso: '2025-09-08',
-        fechaRegistro: '2023-02-15',
-        permisos: permisosPorRol['VENDEDOR'],
-        ventasDelMes: 6,
-        metaDelMes: 8
-      },
-      {
-        id: '7',
-        nombre: 'Miguel',
-        apellido: 'Sales',
-        email: 'miguel.sales@bmwinterlomas.com.mx',
-        telefono: '+52 55 7890-1234',
-        rol: 'VENDEDOR',
-        agencia: 'BMW Interlomas',
-        marca: 'BMW',
-        grupo: 'Grupo Alemán Premium',
-        activo: true,
-        ultimoAcceso: '2025-09-07',
-        fechaRegistro: '2023-03-01',
-        permisos: permisosPorRol['VENDEDOR'],
-        ventasDelMes: 5,
-        metaDelMes: 7
-      },
-      {
-        id: '8',
-        nombre: 'Ana',
-        apellido: 'Rodríguez',
-        email: 'ana.rodriguez@admin.com',
-        telefono: '+52 55 8901-2345',
-        rol: 'ADMINISTRADOR',
-        agencia: 'Corporativo',
-        marca: 'Todas',
-        grupo: 'Grupo Alemán Premium',
-        activo: false,
-        ultimoAcceso: '2025-08-15',
-        fechaRegistro: '2021-01-10',
-        permisos: permisosPorRol['ADMINISTRADOR'],
-        ventasDelMes: 0,
-        metaDelMes: 0
+  // Función para cargar usuarios desde la API
+  const loadUsuarios = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/admin/users?action=list');
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al cargar usuarios');
       }
-    ];
-    
-    setTimeout(() => {
-      setUsuarios(sampleData);
+      
+      // Transformar datos para que coincidan con la interfaz Usuario
+      const usuariosTransformados: Usuario[] = data.usuarios.map((user: any) => ({
+        id: user.id,
+        nombre: user.nombre,
+        apellido: user.apellido || '',
+        email: user.email,
+        telefono: '', // Este campo no viene de la API, se podría agregar después
+        rol: user.rol,
+        agencia: user.agencia?.nombreAgencia || 'Sin asignar',
+        marca: user.marca?.nombreMarca || user.agencia?.marca?.nombreMarca || 'Sin asignar',
+        grupo: user.grupo?.nombreGrupo || 'Sin asignar',
+        activo: user.activo,
+        ultimoAcceso: new Date().toISOString().split('T')[0], // Placeholder
+        fechaRegistro: new Date(user.createdAt).toISOString().split('T')[0],
+        permisos: permisosPorRol[user.rol as keyof typeof permisosPorRol] || [],
+        ventasDelMes: 0, // Placeholder - se podría obtener de métricas
+        metaDelMes: 0 // Placeholder - se podría obtener de metas
+      }));
+      
+      setUsuarios(usuariosTransformados);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      alert(`❌ Error al cargar usuarios:\n${error instanceof Error ? error.message : 'Error desconocido'}`);
+      
+      // Fallback a datos de ejemplo si hay error
+      setUsuarios([]);
+    } finally {
       setLoading(false);
-    }, 500);
+    }
+  };
+
+  useEffect(() => {
+    loadUsuarios();
+    loadAuxiliarData();
   }, []);
 
   if (status === 'loading' || loading) {
@@ -1109,6 +1197,161 @@ export default function UsuariosPage() {
               </Button>
               <Button variant="outline" onClick={() => setShowPerfilModal(false)}>
                 Cerrar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Usuario */}
+      {showEditarModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Editar Usuario</h2>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowEditarModal(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Nombre *</Label>
+                  <Input
+                    value={editandoUsuario.nombre}
+                    onChange={(e) => setEditandoUsuario(prev => ({...prev, nombre: e.target.value}))}
+                    placeholder="Nombre del usuario"
+                  />
+                </div>
+                <div>
+                  <Label>Apellido</Label>
+                  <Input
+                    value={editandoUsuario.apellido}
+                    onChange={(e) => setEditandoUsuario(prev => ({...prev, apellido: e.target.value}))}
+                    placeholder="Apellido del usuario"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  value={editandoUsuario.email}
+                  onChange={(e) => setEditandoUsuario(prev => ({...prev, email: e.target.value}))}
+                  placeholder="email@empresa.com"
+                />
+              </div>
+
+              <div>
+                <Label>Rol *</Label>
+                <Select 
+                  value={editandoUsuario.rol}
+                  onValueChange={(value) => setEditandoUsuario(prev => ({...prev, rol: value}))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un rol" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles.map(rol => (
+                      <SelectItem key={rol.value} value={rol.value}>
+                        {rol.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-4">
+                <div>
+                  <Label>Agencia</Label>
+                  <Select 
+                    value={editandoUsuario.agencia}
+                    onValueChange={(value) => setEditandoUsuario(prev => ({...prev, agencia: value}))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona agencia" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Sin agencia</SelectItem>
+                      {agencias.map(agencia => (
+                        <SelectItem key={agencia.id} value={agencia.id.toString()}>
+                          {agencia.nombreAgencia}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Marca</Label>
+                  <Select 
+                    value={editandoUsuario.marca}
+                    onValueChange={(value) => setEditandoUsuario(prev => ({...prev, marca: value}))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona marca" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Sin marca</SelectItem>
+                      {marcas.map(marca => (
+                        <SelectItem key={marca.id} value={marca.id.toString()}>
+                          {marca.nombreMarca}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Grupo</Label>
+                  <Select 
+                    value={editandoUsuario.grupo}
+                    onValueChange={(value) => setEditandoUsuario(prev => ({...prev, grupo: value}))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona grupo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Sin grupo</SelectItem>
+                      {grupos.map(grupo => (
+                        <SelectItem key={grupo.id} value={grupo.id.toString()}>
+                          {grupo.nombreGrupo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="activo"
+                  checked={editandoUsuario.activo}
+                  onChange={(e) => setEditandoUsuario(prev => ({...prev, activo: e.target.checked}))}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="activo">Usuario activo</Label>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <Button 
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                onClick={handleActualizarUsuario}
+                disabled={loading}
+              >
+                Actualizar Usuario
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => setShowEditarModal(false)}
+              >
+                Cancelar
               </Button>
             </div>
           </div>

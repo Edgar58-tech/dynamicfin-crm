@@ -47,7 +47,7 @@ interface GrabacionProximidad {
 }
 
 export default function ProximityHistory() {
-  const { data: session } = useSession();
+  const { data: session } = useSession() || {};
   const [grabaciones, setGrabaciones] = useState<GrabacionProximidad[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);

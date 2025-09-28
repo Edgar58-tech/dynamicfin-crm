@@ -262,7 +262,7 @@ export default function DashboardGerencialPage() {
             👔 Dashboard Gerencial
           </h1>
           <p className="text-slate-600 mt-1">
-            Centro de Comando - Agencia Automotriz {session.user.agencia?.nombreAgencia}
+            Centro de Comando - Agencia ID {session.user.agenciaId || 'No asignada'}
           </p>
         </div>
         <div className="flex items-center gap-3">

@@ -32,7 +32,7 @@ import ProximityHistory from './proximity-history';
 import ProximityStats from './proximity-stats';
 
 export default function ProximityDashboardClient() {
-  const { data: session } = useSession();
+  const { data: session } = useSession() || {};
   const [estadoSistema, setEstadoSistema] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);

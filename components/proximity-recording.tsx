@@ -497,7 +497,7 @@ export default function ProximityRecording({
           precision: ubicacion.precision,
           grabacionConversacionId: resultadoAudio?.grabacionId,
           motivoFinalizacion: 'salida_zona',
-          calidadDetectada: null, // Asignamos null ya que no tenemos este dato
+          calidadDetectada: resultadoAudio?.metadata?.quality,
         }),
       });
 
@@ -532,18 +532,15 @@ export default function ProximityRecording({
    */
   const iniciarGrabacionAudio = async () => {
     try {
-      const settings = getOptimalSettings();
-      // Aplicar configuración personalizada
-      if (configuracion?.calidadAudio === 'alta') {
-        settings.sampleRate = 48000;
-        settings.bitsPerSecond = 256000;
-      } else if (configuracion?.calidadAudio === 'baja') {
-        settings.sampleRate = 16000;
-        settings.bitsPerSecond = 32000;
-      }
+      // Crear opciones de grabación basadas en configuración
+      const recordingOptions = {
+        echoCancellation: true,
+        noiseSuppression: configuracion?.calidadAudio !== 'baja',
+        autoGainControl: true
+      };
 
-      const recorder = new AudioRecorder();
-      await recorder.start();
+      const recorder = new AudioRecorder(recordingOptions);
+      await recorder.startRecording();
       
       setAudioRecorder(recorder);
       setGrabando(true);
@@ -560,14 +557,15 @@ export default function ProximityRecording({
     if (!audioRecorder || !grabando) return null;
 
     try {
-      const result = await audioRecorder.stop();      setGrabando(false);
+      const result = await audioRecorder.stopRecording();
+      setGrabando(false);
       setAudioRecorder(null);
 
       // Aquí se integraría con el sistema de subida y procesamiento existente
       // Por simplicidad, retornamos el resultado del audio
       return {
         blob: result,
-        metadata: {}, // Devolvemos metadata vacía ya que result no la contiene
+        metadata: (result as any).metadata || { duration: 0 },
         grabacionId: null, // Se obtendría del sistema de grabación principal
       };
     } catch (error) {

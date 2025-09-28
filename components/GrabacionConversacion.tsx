@@ -92,8 +92,8 @@ export default function GrabacionConversacion({
   // Verificar soporte de audio al montar
   useEffect(() => {
     const audioSupport = checkAudioSupport();
-    if (!audioSupport) {
-      setError('Tu navegador no soporta la API de grabación de audio.');
+    if (!audioSupport.supported) {
+      setError(`Tu navegador no soporta grabación de audio: ${audioSupport.errors.join(', ')}`);
     }
 
     return () => {
@@ -109,9 +109,12 @@ export default function GrabacionConversacion({
 
   const initializeRecorder = async () => {
     try {
-      // Ya no necesitamos la variable 'settings' aquí.
-      // Simplemente crea la instancia, y usará las opciones por defecto del micrófono.
-      const recorder = new AudioRecorder();      setAudioRecorder(recorder);
+      const recorder = new AudioRecorder({
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      });
+      setAudioRecorder(recorder);
       return recorder;
     } catch (error) {
       console.error('Error initializing recorder:', error);
@@ -130,7 +133,7 @@ export default function GrabacionConversacion({
         if (!recorder) return;
       }
 
-      await recorder.start();
+      await recorder.startRecording();
       setIsRecording(true);
       setRecordingTime(0);
       setCurrentStep('recording');
@@ -152,16 +155,16 @@ export default function GrabacionConversacion({
     try {
       if (!audioRecorder || !isRecording) return;
 
-      const result = await audioRecorder.stop();
+      const result = await audioRecorder.stopRecording();
       setIsRecording(false);
       setIsPaused(false);
-      setRecordedAudio({ blob: result, metadata: {} });
+      setRecordedAudio({ blob: result, metadata: (result as any).metadata || { duration: 0 } });
       
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
 
-      toast.success(`🎵 Grabación completada: ${formatDuration(recordingTime)}`);
+      toast.success(`🎵 Grabación completada: ${formatDuration((result as any).metadata?.duration || 0)}`);
       setCurrentStep('upload');
     } catch (error) {
       console.error('Error al detener grabación:', error);

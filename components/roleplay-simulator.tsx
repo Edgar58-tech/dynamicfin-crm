@@ -1,6 +1,6 @@
 
 'use client';
-import { RolePlayScenario as Scenario } from '@prisma/client';
+import { RolePlayScenario } from '@prisma/client';
 import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,6 +36,8 @@ interface Message {
   timestamp: string;
 }
 
+// Usar el tipo importado directamente
+type Scenario = RolePlayScenario;
 
 interface RolePlaySimulatorProps {
   scenario: Scenario | undefined;
@@ -48,7 +50,7 @@ export default function RolePlaySimulator({
   onComplete, 
   onEvaluate 
 }: RolePlaySimulatorProps) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession() || {};
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [isSimulating, setIsSimulating] = useState(false);
@@ -63,16 +65,27 @@ export default function RolePlaySimulator({
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const startTimeRef = useRef<Date>(new Date());
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Timer para duración de sesión
   useEffect(() => {
-    let interval: NodeJS.Timeout;
     if (sessionStarted && !sessionCompleted) {
-      interval = setInterval(() => {
+      intervalRef.current = setInterval(() => {
         setSessionDuration(Math.floor((Date.now() - startTimeRef.current.getTime()) / 1000));
       }, 1000);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
-    return () => clearInterval(interval);
+    
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [sessionStarted, sessionCompleted]);
 
   // Auto scroll to bottom
@@ -141,6 +154,10 @@ export default function RolePlaySimulator({
       }
 
       const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No se pudo obtener el reader de la respuesta');
+      }
+      
       const decoder = new TextDecoder();
 
       // Crear mensaje inicial de IA vacío
@@ -154,7 +171,7 @@ export default function RolePlaySimulator({
       setMessages(prev => [...prev, initialAiMessage]);
 
       while (true) {
-        const { done, value } = await reader?.read() || {};
+        const { done, value } = await reader.read();
         if (done) break;
 
         const chunk = decoder.decode(value);
@@ -269,6 +286,10 @@ export default function RolePlaySimulator({
       }
 
       const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No se pudo obtener el reader de la respuesta');
+      }
+      
       const decoder = new TextDecoder();
 
       // Crear mensaje inicial de IA vacío
@@ -284,7 +305,7 @@ export default function RolePlaySimulator({
       let streamCompleted = false;
 
       while (true) {
-        const { done, value } = await reader?.read() || {};
+        const { done, value } = await reader.read();
         if (done) break;
 
         const chunk = decoder.decode(value);
@@ -336,7 +357,7 @@ export default function RolePlaySimulator({
                 toast.error(parsed.message || 'Error en la simulación');
                 throw new Error(parsed.message || 'Error en la simulación');
               }
-            } catch (e) {
+            } catch (e: any) {
               if (e.message && e.message.includes('Error en la simulación')) {
                 throw e; // Re-throw simulation errors
               }
@@ -354,7 +375,7 @@ export default function RolePlaySimulator({
         throw new Error('El streaming no se completó correctamente');
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
       toast.error('Error en la comunicación con el servidor');
       
@@ -438,6 +459,11 @@ export default function RolePlaySimulator({
     setEvaluation(null);
     setShowEvaluation(false);
     startTimeRef.current = new Date();
+    
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -754,9 +780,9 @@ export default function RolePlaySimulator({
                   </div>
                 </div>
 
-                {onEvaluate && (
+                {onEvaluate && sessionId && (
                   <Button 
-                    onClick={() => onEvaluate(sessionId!)}
+                    onClick={() => onEvaluate(sessionId)}
                     variant="outline" 
                     size="sm"
                     className="w-full gap-2"

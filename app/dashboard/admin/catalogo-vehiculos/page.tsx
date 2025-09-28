@@ -26,7 +26,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { TipoRol } from '@prisma/client';
+import { TipoRol } from '@/lib/types';
 
 interface VehiculoCatalogo {
   id: number;

@@ -1,20 +1,12 @@
 
-/**
- * API para subida de archivos de audio a Supabase Storage
- * Maneja la carga de archivos de grabaciones y genera URLs seguras
- */
-
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { uploadFile } from '@/lib/storage';
-import { checkPaymentStatus } from '@/lib/payment-guard';
+import { prisma } from '@/lib/db';
+import { uploadFile } from '@/lib/s3';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * POST - Subir archivo de audio
- */
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -22,226 +14,140 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    if (session.user.rol !== 'VENDEDOR' && session.user.rol !== 'GERENTE_VENTAS') {
-      return NextResponse.json({ error: 'Rol no autorizado' }, { status: 403 });
-    }
-
-    // Verificar estado de pago de la agencia
     if (!session.user.agenciaId) {
-      return NextResponse.json(
-        { error: 'Usuario no asociado a agencia' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Usuario sin agencia asignada' }, { status: 400 });
     }
 
-    const paymentStatus = await checkPaymentStatus(session.user.agenciaId, 'grabacion');
-    if (!paymentStatus.canUseService) {
-      return NextResponse.json(
-        { 
-          error: paymentStatus.reason,
-          paymentStatus,
-          code: 'PAYMENT_REQUIRED',
-        },
-        { status: 403 }
-      );
-    }
-
-    // Procesar FormData
     const formData = await request.formData();
     const file = formData.get('audio') as File;
     const prospectoId = formData.get('prospectoId') as string;
     const tipoLlamada = formData.get('tipoLlamada') as string;
     const duracion = formData.get('duracion') as string;
+    const observaciones = formData.get('observaciones') as string;
+    const esProximidad = formData.get('esProximidad') === 'true';
 
-    if (!file) {
-      return NextResponse.json(
-        { error: 'Archivo de audio requerido' },
-        { status: 400 }
-      );
+    if (!file || !prospectoId) {
+      return NextResponse.json({ 
+        error: 'Archivo de audio y ID de prospecto son requeridos' 
+      }, { status: 400 });
     }
 
-    if (!prospectoId || !tipoLlamada || !duracion) {
-      return NextResponse.json(
-        { error: 'Campos requeridos: prospectoId, tipoLlamada, duracion' },
-        { status: 400 }
-      );
-    }
-
-    // Validar tipo de archivo
-    const allowedTypes = ['audio/webm', 'audio/wav', 'audio/mp3', 'audio/m4a', 'audio/ogg'];
-    if (!allowedTypes.some(type => file.type.includes(type.split('/')[1]))) {
-      return NextResponse.json(
-        { error: `Tipo de archivo no válido. Tipos permitidos: ${allowedTypes.join(', ')}` },
-        { status: 400 }
-      );
-    }
-
-    // Validar tamaño (máximo 50MB)
-    const maxSize = 50 * 1024 * 1024; // 50MB
-    if (file.size > maxSize) {
-      return NextResponse.json(
-        { error: 'El archivo excede el tamaño máximo de 50MB' },
-        { status: 400 }
-      );
-    }
-
-    try {
-      // Generar nombre único para el archivo
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const extension = file.name.split('.').pop() || 'webm';
-      const fileName = `grabacion-${timestamp}.${extension}`;
-
-      // Subir archivo a Supabase Storage
-      const uploadResult = await uploadFile(
-        file,
-        fileName,
-        'audio',
-        {
-          agenciaId: session.user.agenciaId,
-          prospectoId: parseInt(prospectoId),
-          vendedorId: session.user.id,
-          replace: false,
-        }
-      );
-
-      if (!uploadResult.success) {
-        console.error('Error uploading to storage:', uploadResult.error);
-        return NextResponse.json(
-          { error: uploadResult.error || 'Error al subir archivo' },
-          { status: 500 }
-        );
+    // Validar prospecto existe y pertenece a la agencia del usuario
+    const prospecto = await prisma.prospecto.findFirst({
+      where: {
+        id: parseInt(prospectoId),
+        agenciaId: session.user.agenciaId
+      },
+      include: {
+        vendedor: true
       }
+    });
 
-      // Metadata adicional
-      const audioMetadata = {
-        size: file.size,
-        type: file.type,
-        duration: parseInt(duracion),
-        lastModified: file.lastModified,
-        quality: file.size > 1024 * 1024 && parseInt(duracion) > 60 ? 'EXCELENTE' :
-                 parseInt(duracion) > 30 ? 'BUENA' :
-                 parseInt(duracion) < 10 ? 'MALA' : 'REGULAR',
-      };
-
-      return NextResponse.json({
-        success: true,
-        url: uploadResult.url,
-        path: uploadResult.path,
-        metadata: {
-          ...uploadResult.metadata,
-          ...audioMetadata,
-        },
-        paymentStatus,
-      });
-
-    } catch (uploadError) {
-      console.error('Error en upload:', uploadError);
-      return NextResponse.json(
-        { error: 'Error al procesar el archivo de audio' },
-        { status: 500 }
-      );
+    if (!prospecto) {
+      return NextResponse.json({ error: 'Prospecto no encontrado' }, { status: 404 });
     }
 
-  } catch (error) {
-    console.error('Error in upload endpoint:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
-  }
-}
+    // Verificar límites de grabación de la agencia
+    const agencia = await prisma.agencia.findUnique({
+      where: { id: session.user.agenciaId },
+      select: {
+        limiteGrabacionesMes: true,
+        grabacionesUsadas: true,
+        estadoPago: true
+      }
+    });
 
-/**
- * GET - Obtener URL de descarga para un archivo
- */
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    if (agencia?.estadoPago !== 'ACTIVO') {
+      return NextResponse.json({ 
+        error: 'La agencia tiene pagos pendientes. Contacte al administrador.' 
+      }, { status: 402 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const filePath = searchParams.get('path');
-
-    if (!filePath) {
-      return NextResponse.json(
-        { error: 'Path del archivo requerido' },
-        { status: 400 }
-      );
+    if ((agencia?.grabacionesUsadas || 0) >= (agencia?.limiteGrabacionesMes || 0)) {
+      return NextResponse.json({ 
+        error: 'Límite mensual de grabaciones alcanzado. Actualice su plan.' 
+      }, { status: 429 });
     }
 
-    // TODO: Verificar que el usuario tenga acceso a este archivo
-    // (debe ser su grabación o de su agencia si es gerente)
+    // Convertir archivo a buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    const { downloadFile } = await import('@/lib/storage');
-    const downloadResult = await downloadFile(filePath, 'audio');
+    // Subir a S3
+    const fileName = `${prospecto.nombre}-${prospecto.id}-${Date.now()}.webm`;
+    const cloud_storage_path = await uploadFile(buffer, fileName);
 
-    if (!downloadResult.success) {
-      return NextResponse.json(
-        { error: downloadResult.error || 'Error al generar URL de descarga' },
-        { status: 500 }
-      );
-    }
+    // Crear registro de grabación
+    const grabacion = await prisma.grabacionConversacion.create({
+      data: {
+        prospectoId: parseInt(prospectoId),
+        vendedorId: session.user.id,
+        tipoLlamada: tipoLlamada || 'seguimiento',
+        duracion: parseInt(duracion) || 0,
+        rutaArchivo: cloud_storage_path, // Usar rutaArchivo en lugar de cloud_storage_path
+        tamanoArchivo: BigInt(buffer.length),
+        formatoAudio: 'webm',
+        calidadAudio: buffer.length > 1000000 ? 'alta' : 'media',
+        dispositivoGrabacion: 'web',
+        ipOrigen: request.headers.get('x-forwarded-for') || 'unknown',
+        esGrabacionProximidad: esProximidad,
+        observacionesVendedor: observaciones,
+        procesado: false
+      }
+    });
+
+    // Incrementar contador de grabaciones de la agencia
+    await prisma.agencia.update({
+      where: { id: session.user.agenciaId },
+      data: {
+        grabacionesUsadas: {
+          increment: 1
+        }
+      }
+    });
+
+    // Procesar transcripción y análisis en background
+    processRecordingAsync(grabacion.id);
 
     return NextResponse.json({
       success: true,
-      url: downloadResult.url,
-      expiresAt: downloadResult.expiresAt,
+      grabacion: {
+        id: grabacion.id,
+        rutaArchivo: grabacion.rutaArchivo,
+        duracion: grabacion.duracion,
+        fechaGrabacion: grabacion.fechaGrabacion,
+        procesando: true
+      },
+      message: 'Grabación subida exitosamente. El procesamiento iniciará en breve.'
     });
 
-  } catch (error) {
-    console.error('Error in download endpoint:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    console.error('Error subiendo grabación:', error);
+    return NextResponse.json({
+      error: 'Error interno del servidor',
+      details: error.message
+    }, { status: 500 });
   }
 }
 
-/**
- * DELETE - Eliminar archivo de audio
- */
-export async function DELETE(request: NextRequest) {
+async function processRecordingAsync(grabacionId: number) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const filePath = searchParams.get('path');
-
-    if (!filePath) {
-      return NextResponse.json(
-        { error: 'Path del archivo requerido' },
-        { status: 400 }
-      );
-    }
-
-    // TODO: Verificar que el usuario tenga acceso a eliminar este archivo
-    // Solo el vendedor propietario o gerentes de la agencia
-
-    const { deleteFile } = await import('@/lib/storage');
-    const deleteResult = await deleteFile(filePath, 'audio');
-
-    if (!deleteResult.success) {
-      return NextResponse.json(
-        { error: deleteResult.error || 'Error al eliminar archivo' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Archivo eliminado exitosamente',
+    console.log(`Iniciando procesamiento de grabación ${grabacionId}`);
+    
+    // Llamar a la API de procesamiento
+    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/grabaciones/process`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ grabacionId })
     });
 
+    if (!response.ok) {
+      console.error(`Error procesando grabación ${grabacionId}:`, response.statusText);
+    }
+    
   } catch (error) {
-    console.error('Error in delete endpoint:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
+    console.error(`Error en procesamiento asíncrono de grabación ${grabacionId}:`, error);
   }
 }

@@ -1,12 +1,47 @@
 
-import { TipoRol } from '@prisma/client';
+// Re-export all Prisma types
+export type {
+  ZonaProximidad,
+  RolePlayScenario,
+  User,
+  Prospecto,
+  Agencia,
+  Marca,
+  GrupoAutomotriz,
+  Vehiculo,
+  VehiculoCatalogo,
+  MetricaVenta,
+  Grabacion,
+  Interaccion,
+  SPCCPilar,
+  SPCCEvaluacion,
+  CrmConfiguration,
+  CrmFieldMapping,
+  CrmSyncLog,
+
+  VendedorGuardia,
+  ProximityConfiguration,
+  ProximityDetection,
+  AutoRecording,
+  RolePlaySession,
+  RolePlayEvaluation,
+  MonitoringAlert,
+  TestExecution,
+  TestResult,
+  AlertaMonitoreo,
+  MonitoringMetric
+} from "@prisma/client"
+
+// Import TipoRol as a value (not type) to use in arrays and comparisons
+export { TipoRol } from '@prisma/client';
+import type { TipoRol as TipoRolType } from '@prisma/client';
 import { DefaultSession } from 'next-auth';
 
 declare module 'next-auth' {
   interface Session {
     user: {
       id: string;
-      rol: TipoRol;
+      rol: TipoRolType;
       agenciaId?: number | null;
       marcaId?: number | null;
       grupoId?: number | null;
@@ -15,11 +50,12 @@ declare module 'next-auth' {
       grupo?: any;
       nombre: string;
       apellido?: string | null;
+      cargaProspectos?: number;
     } & DefaultSession['user'];
   }
 
   interface User {
-    rol: TipoRol;
+    rol: TipoRolType;
     agenciaId?: number | null;
     marcaId?: number | null;
     grupoId?: number | null;
@@ -28,22 +64,25 @@ declare module 'next-auth' {
     grupo?: any;
     nombre: string;
     apellido?: string | null;
+    cargaProspectos?: number;
   }
 }
 
-declare module 'next-auth/jwt' {
-  interface JWT {
-    rol: TipoRol;
-    agenciaId?: number | null;
-    marcaId?: number | null;
-    grupoId?: number | null;
-    agencia?: any;
-    marca?: any;
-    grupo?: any;
-    nombre: string;
-    apellido?: string | null;
-  }
-}
+// Temporarily commented out due to module resolution issue
+// declare module 'next-auth/jwt' {
+//   interface JWT {
+//     rol: TipoRolType;
+//     agenciaId?: number | null;
+//     marcaId?: number | null;
+//     grupoId?: number | null;
+//     agencia?: any;
+//     marca?: any;
+//     grupo?: any;
+//     nombre: string;
+//     apellido?: string | null;
+//     cargaProspectos?: number;
+//   }
+// }
 
 // SPPC Classification Types
 export type ClasificacionSPPC = 'Elite' | 'Calificado' | 'A Madurar' | 'Explorador';

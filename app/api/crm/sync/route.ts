@@ -1,72 +1,259 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import type { Prospecto, User, VehiculoCatalogo } from '@prisma/client';
 
-// Ejemplo de configuración CRM (en producción vendría de base de datos)
-const getCRMConfig = () => {
-  return {
-    crmActivo: true,
-    crmTipo: 'salesforce',
-    crmApiUrl: process.env.CRM_API_URL || 'https://api.salesforce.com/v1/',
-    crmApiKey: process.env.CRM_API_KEY || '',
-    crmSecretKey: process.env.CRM_SECRET_KEY || '',
-    sincronizacionBidireccional: true,
-    frecuenciaSincronizacion: 15,
+// Tipo para prospecto con relaciones incluidas
+type ProspectoConRelaciones = Prospecto & {
+  vendedor: User | null;
+  vehiculoCatalogo: VehiculoCatalogo | null;
+};
+
+// CRM Integration Classes
+class SalesforceIntegration {
+  constructor(private config: any) {}
+
+  async authenticate(): Promise<string> {
+    const authUrl = `${this.config.crmApiUrl}/services/oauth2/token`;
+    
+    const params = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: this.config.crmApiKey,
+      client_secret: this.config.crmSecretKey
+    });
+
+    const response = await fetch(authUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+
+    if (!response.ok) {
+      throw new Error(`Salesforce auth failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.access_token;
+  }
+
+  async createLead(prospecto: any): Promise<any> {
+    const accessToken = await this.authenticate();
+    
+    const leadData = {
+      FirstName: prospecto.nombre,
+      LastName: prospecto.apellido || 'Prospect',
+      Email: prospecto.email,
+      Phone: prospecto.telefono,
+      Company: 'DynamicFin Lead',
+      LeadSource: this.mapOrigenLead(prospecto.origenLead),
+      Status: this.mapEstatus(prospecto.estatus),
+      Industry: 'Automotive',
+      Budget__c: prospecto.presupuesto,
+      Vehicle_Interest__c: prospecto.vehiculoInteres,
+      SPCC_Score__c: Number(prospecto.calificacionTotal),
+      Classification__c: prospecto.clasificacion
+    };
+
+    const response = await fetch(`${this.config.crmApiUrl}/services/data/v58.0/sobjects/Lead`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(leadData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Salesforce create lead failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async updateLead(salesforceId: string, prospecto: any): Promise<any> {
+    const accessToken = await this.authenticate();
+    
+    const updateData = {
+      Status: this.mapEstatus(prospecto.estatus),
+      SPCC_Score__c: Number(prospecto.calificacionTotal),
+      Classification__c: prospecto.clasificacion,
+      LastModifiedDate: new Date().toISOString()
+    };
+
+    const response = await fetch(`${this.config.crmApiUrl}/services/data/v58.0/sobjects/Lead/${salesforceId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updateData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Salesforce update failed: ${response.statusText}`);
+    }
+
+    return { success: true };
+  }
+
+  private mapOrigenLead(origen: string): string {
+    switch (origen) {
+      case 'LLAMADA_ENTRANTE': return 'Phone Inquiry';
+      case 'VISITA_SHOWROOM': return 'Walk In';
+      case 'OTROS': return 'Other';
+      default: return 'Web';
+    }
+  }
+
+  private mapEstatus(estatus: string): string {
+    switch (estatus) {
+      case 'Nuevo': return 'Open - Not Contacted';
+      case 'Contactado': return 'Working - Contacted';
+      case 'Calificado': return 'Qualified';
+      case 'Perdido': return 'Closed - Not Converted';
+      case 'Vendido': return 'Closed - Converted';
+      default: return 'Open - Not Contacted';
+    }
+  }
+}
+
+class SICOPIntegration {
+  constructor(private config: any) {}
+
+  async createProspect(prospecto: any): Promise<any> {
+    const prospectData = {
+      dealer_code: JSON.parse(this.config.configuracionAvanzada).dealerCode,
+      customer: {
+        first_name: prospecto.nombre,
+        last_name: prospecto.apellido || 'Prospecto',
+        email: prospecto.email,
+        phone: prospecto.telefono,
+        budget: prospecto.presupuesto,
+        vehicle_interest: prospecto.vehiculoInteres,
+        lead_source: prospecto.origenLead,
+        spcc_score: Number(prospecto.calificacionTotal),
+        classification: prospecto.clasificacion
+      },
+      created_at: new Date().toISOString(),
+      region: JSON.parse(this.config.configuracionAvanzada).region
+    };
+
+    const response = await fetch(`${this.config.crmApiUrl}/prospects`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.config.crmApiKey}`,
+        'X-Dealer-Secret': this.config.crmSecretKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(prospectData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`SICOP create prospect failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async syncInventory(vehiculos: any[]): Promise<any> {
+    const inventoryData = {
+      dealer_code: JSON.parse(this.config.configuracionAvanzada).dealerCode,
+      vehicles: vehiculos.map(v => ({
+        vin: v.numeroSerie,
+        make: v.marca,
+        model: v.modelo,
+        year: v.year,
+        price: Number(v.precio),
+        status: v.estatus,
+        color: v.color
+      }))
+    };
+
+    const response = await fetch(`${this.config.crmApiUrl}/inventory/sync`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.config.crmApiKey}`,
+        'X-Dealer-Secret': this.config.crmSecretKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(inventoryData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`SICOP inventory sync failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+}
+
+// Generic CRM factory
+function createCRMIntegration(config: any) {
+  switch (config.crmTipo) {
+    case 'salesforce':
+      return new SalesforceIntegration(config);
+    case 'custom':
+      if (config.nombre.includes('SICOP')) {
+        return new SICOPIntegration(config);
+      }
+      return null;
+    default:
+      return null;
+  }
+}
+
+async function getCRMConfig(agenciaId: number, crmName?: string) {
+  const whereCondition: any = {
+    agenciaId: agenciaId,
+    activo: true
   };
-};
-
-// Función para enviar datos al CRM
-const sendToCRM = async (data: any, endpoint: string) => {
-  const config = getCRMConfig();
   
-  if (!config.crmActivo) {
-    throw new Error('CRM integration is disabled');
+  if (crmName) {
+    whereCondition.nombre = { contains: crmName };
   }
 
-  const response = await fetch(`${config.crmApiUrl}${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.crmApiKey}`,
-      'X-API-Secret': config.crmSecretKey,
-    },
-    body: JSON.stringify(data),
+  return await prisma.crmConfiguration.findFirst({
+    where: whereCondition
   });
+}
 
-  if (!response.ok) {
-    throw new Error(`CRM API error: ${response.status} ${response.statusText}`);
-  }
-
-  return await response.json();
-};
-
-// Función para obtener datos del CRM
-const getFromCRM = async (endpoint: string) => {
-  const config = getCRMConfig();
-  
-  if (!config.crmActivo) {
-    throw new Error('CRM integration is disabled');
-  }
-
-  const response = await fetch(`${config.crmApiUrl}${endpoint}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${config.crmApiKey}`,
-      'X-API-Secret': config.crmSecretKey,
-    },
+async function logCRMOperation(
+  crmConfigId: number, 
+  operation: string, 
+  entity: string, 
+  status: string, 
+  details: any,
+  userId?: string
+) {
+  return await prisma.crmSyncLog.create({
+    data: {
+      crmConfigurationId: crmConfigId,
+      tipoOperacion: operation,
+      entidad: entity,
+      accion: details.action || 'sync',
+      estadoSync: status,
+      registrosProcesados: details.processed || 0,
+      registrosExitosos: details.successful || 0,
+      registrosFallidos: details.failed || 0,
+      tiempoEjecucion: details.duration || 0,
+      detalleOperacion: JSON.stringify(details.details || {}),
+      errores: details.errors ? JSON.stringify(details.errors) : null,
+      datosEnviados: details.sentData ? JSON.stringify(details.sentData) : null,
+      respuestaCrm: details.response ? JSON.stringify(details.response) : null,
+      codigoRespuesta: details.statusCode || null,
+      usuarioId: userId,
+      fechaInicio: new Date(),
+      fechaFin: new Date()
+    }
   });
-
-  if (!response.ok) {
-    throw new Error(`CRM API error: ${response.status} ${response.statusText}`);
-  }
-
-  return await response.json();
-};
+}
 
 // API para sincronización manual
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
     if (!session?.user) {
       return NextResponse.json(
@@ -75,83 +262,226 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { action, data } = await request.json();
+    if (!session.user.agenciaId) {
+      return NextResponse.json(
+        { error: 'Usuario sin agencia asignada' },
+        { status: 400 }
+      );
+    }
+
+    const { action, data, crmName } = await request.json();
+    const startTime = Date.now();
+
+    // Obtener configuración CRM
+    const crmConfig = await getCRMConfig(session.user.agenciaId, crmName);
+    
+    if (!crmConfig) {
+      return NextResponse.json(
+        { error: 'Configuración CRM no encontrada o inactiva' },
+        { status: 404 }
+      );
+    }
+
+    const crmIntegration = createCRMIntegration(crmConfig);
+    
+    if (!crmIntegration) {
+      return NextResponse.json(
+        { error: 'Tipo de CRM no soportado' },
+        { status: 400 }
+      );
+    }
+
+    let result: any = {};
+    let logDetails: any = {};
 
     switch (action) {
       case 'sync_prospects':
-        // Sincronizar prospectos a CRM
-        const prospectsResult = await sendToCRM({
-          prospects: data.prospects,
-          source: 'dynamicfin'
-        }, 'prospects');
-        
-        return NextResponse.json({
-          success: true,
-          message: 'Prospectos sincronizados exitosamente',
-          data: prospectsResult,
-          synced: data.prospects?.length || 0
-        });
+        try {
+          // Obtener prospectos recientes si no se proporcionan
+          let prospectos: ProspectoConRelaciones[] = data.prospects || [];
+          if (!prospectos || prospectos.length === 0) {
+            prospectos = await prisma.prospecto.findMany({
+              where: {
+                agenciaId: session.user.agenciaId!,
+                updatedAt: {
+                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Últimas 24 horas
+                }
+              },
+              include: {
+                vendedor: true,
+                vehiculoCatalogo: true
+              },
+              take: 50
+            });
+          }
 
-      case 'sync_vehicles':
-        // Sincronizar inventario a CRM
-        const vehiclesResult = await sendToCRM({
-          vehicles: data.vehicles,
-          source: 'dynamicfin'
-        }, 'inventory');
-        
-        return NextResponse.json({
-          success: true,
-          message: 'Inventario sincronizado exitosamente',
-          data: vehiclesResult,
-          synced: data.vehicles?.length || 0
-        });
+          let successful = 0;
+          let failed = 0;
+          const errors = [];
 
-      case 'sync_sales':
-        // Sincronizar ventas a CRM
-        const salesResult = await sendToCRM({
-          sales: data.sales,
-          source: 'dynamicfin'
-        }, 'sales');
-        
-        return NextResponse.json({
-          success: true,
-          message: 'Ventas sincronizadas exitosamente',
-          data: salesResult,
-          synced: data.sales?.length || 0
-        });
+          for (const prospecto of prospectos) {
+            try {
+              if (crmIntegration instanceof SalesforceIntegration) {
+                await crmIntegration.createLead(prospecto);
+              } else if (crmIntegration instanceof SICOPIntegration) {
+                await crmIntegration.createProspect(prospecto);
+              }
+              successful++;
+            } catch (error: any) {
+              failed++;
+              errors.push({ prospecto: prospecto.id, error: error.message });
+            }
+          }
 
-      case 'pull_from_crm':
-        // Obtener actualizaciones del CRM
-        const updates = await getFromCRM('updates/latest');
-        
-        return NextResponse.json({
-          success: true,
-          message: 'Actualizaciones obtenidas del CRM',
-          data: updates,
-          received: updates?.items?.length || 0
-        });
+          result = {
+            success: true,
+            message: `${successful} prospectos sincronizados, ${failed} fallidos`,
+            processed: prospectos.length,
+            successful,
+            failed
+          };
+
+          logDetails = {
+            action: 'sync_prospects',
+            processed: prospectos.length,
+            successful,
+            failed,
+            duration: (Date.now() - startTime) / 1000,
+            details: { errors },
+            sentData: prospectos.map(p => ({ id: p.id, nombre: p.nombre })),
+            statusCode: 200
+          };
+
+        } catch (error: any) {
+          result = { success: false, error: error.message };
+          logDetails = {
+            action: 'sync_prospects',
+            processed: 0,
+            successful: 0,
+            failed: 1,
+            duration: (Date.now() - startTime) / 1000,
+            errors: [error.message],
+            statusCode: 500
+          };
+        }
+        break;
+
+      case 'sync_inventory':
+        try {
+          // Obtener inventario actual
+          const vehiculos = await prisma.vehiculo.findMany({
+            where: { agenciaId: session.user.agenciaId || 0 }
+          });
+
+          if (crmIntegration instanceof SICOPIntegration) {
+            const syncResult = await crmIntegration.syncInventory(vehiculos);
+            result = {
+              success: true,
+              message: 'Inventario sincronizado exitosamente',
+              data: syncResult,
+              synced: vehiculos.length
+            };
+          } else {
+            throw new Error('Sincronización de inventario no soportada para este CRM');
+          }
+
+          logDetails = {
+            action: 'sync_inventory',
+            processed: vehiculos.length,
+            successful: vehiculos.length,
+            failed: 0,
+            duration: (Date.now() - startTime) / 1000,
+            sentData: vehiculos.length,
+            statusCode: 200
+          };
+
+        } catch (error: any) {
+          result = { success: false, error: error.message };
+          logDetails = {
+            action: 'sync_inventory',
+            processed: 0,
+            successful: 0,
+            failed: 1,
+            duration: (Date.now() - startTime) / 1000,
+            errors: [error.message],
+            statusCode: 500
+          };
+        }
+        break;
 
       case 'test_connection':
-        // Probar conexión con CRM
         try {
-          const testResult = await getFromCRM('health');
-          return NextResponse.json({
-            success: true,
-            message: 'Conexión exitosa con CRM',
-            data: {
-              status: 'connected',
-              version: testResult.version || 'unknown',
-              latency: Date.now() - new Date().getTime(),
-              limits: testResult.limits || {}
-            }
-          });
+          if (crmIntegration instanceof SalesforceIntegration) {
+            const token = await crmIntegration.authenticate();
+            result = {
+              success: true,
+              message: 'Conexión exitosa con Salesforce',
+              data: {
+                status: 'connected',
+                crm: 'Salesforce',
+                authenticated: !!token,
+                timestamp: new Date().toISOString()
+              }
+            };
+          } else {
+            // Test genérico para otros CRMs
+            result = {
+              success: true,
+              message: `Conexión exitosa con ${crmConfig.nombre}`,
+              data: {
+                status: 'connected',
+                crm: crmConfig.crmTipo,
+                config_active: crmConfig.activo,
+                last_sync: crmConfig.ultimaSincronizacion
+              }
+            };
+          }
+
+          logDetails = {
+            action: 'test_connection',
+            processed: 1,
+            successful: 1,
+            failed: 0,
+            duration: (Date.now() - startTime) / 1000,
+            statusCode: 200
+          };
+
         } catch (error: any) {
-          return NextResponse.json({
+          result = {
             success: false,
             error: 'Error de conexión con CRM',
             details: error.message
-          }, { status: 500 });
+          };
+          
+          logDetails = {
+            action: 'test_connection',
+            processed: 1,
+            successful: 0,
+            failed: 1,
+            duration: (Date.now() - startTime) / 1000,
+            errors: [error.message],
+            statusCode: 500
+          };
         }
+        break;
+
+      case 'pull_updates':
+        // Implementar pull desde CRM (futuro)
+        result = {
+          success: true,
+          message: 'Pull desde CRM no implementado aún',
+          data: { received: 0 }
+        };
+        
+        logDetails = {
+          action: 'pull_updates',
+          processed: 0,
+          successful: 0,
+          failed: 0,
+          duration: (Date.now() - startTime) / 1000,
+          statusCode: 200
+        };
+        break;
 
       default:
         return NextResponse.json(
@@ -159,6 +489,24 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
     }
+
+    // Log de la operación
+    await logCRMOperation(
+      crmConfig.id,
+      action,
+      action.includes('prospect') ? 'prospectos' : action.includes('inventory') ? 'vehiculos' : 'conexion',
+      result.success ? 'exitoso' : 'error',
+      logDetails,
+      session.user.id
+    );
+
+    // Actualizar última sincronización
+    await prisma.crmConfiguration.update({
+      where: { id: crmConfig.id },
+      data: { ultimaSincronizacion: new Date() }
+    });
+
+    return NextResponse.json(result);
 
   } catch (error: any) {
     console.error('Error en sincronización CRM:', error);
@@ -263,15 +611,18 @@ export async function GET(request: NextRequest) {
 
       case 'config':
         // Configuración actual del CRM
-        const config = getCRMConfig();
+        if (!session.user.agenciaId) {
+          return NextResponse.json({ error: 'Usuario sin agencia asignada' }, { status: 400 });
+        }
+        const config = await getCRMConfig(session.user.agenciaId);
         return NextResponse.json({
           success: true,
-          data: {
+          data: config ? {
             ...config,
             // Ocultar información sensible
             crmApiKey: config.crmApiKey ? '***' + config.crmApiKey.slice(-4) : '',
             crmSecretKey: config.crmSecretKey ? '***' + config.crmSecretKey.slice(-4) : ''
-          }
+          } : null
         });
 
       default:

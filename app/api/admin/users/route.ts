@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { PrismaClient, TipoRol } from '@prisma/client';
+import { PrismaClient, TipoRol, TipoRolValues } from '@/lib/prisma-types';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
           stats: {
             totalUsuarios,
             usuariosInactivos,
-            porRol: stats.reduce((acc, stat) => {
+            porRol: stats.reduce((acc: any, stat: any) => {
               acc[stat.rol] = stat._count.id;
               return acc;
             }, {} as Record<string, number>)
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Validar rol
-        if (!Object.values(TipoRol).includes(rol)) {
+        if (!Object.values(TipoRolValues).includes(rol)) {
           return NextResponse.json({ 
             error: 'Rol no válido' 
           }, { status: 400 });
@@ -271,7 +271,7 @@ export async function POST(request: NextRequest) {
           }
           dataToUpdate.email = updateData.email;
         }
-        if (updateData.rol && Object.values(TipoRol).includes(updateData.rol)) {
+        if (updateData.rol && Object.values(TipoRolValues).includes(updateData.rol)) {
           dataToUpdate.rol = updateData.rol;
         }
         if (updateData.agenciaId !== undefined) {
