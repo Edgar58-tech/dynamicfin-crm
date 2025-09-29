@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     // Obtener vendedores de guardia
     const vendedoresGuardia = await prisma.vendedorGuardia.findMany({
       where: {
-        fechaGuardia: hoy,
+        fecha: hoy,,
         activo: true
       },
       include: {
