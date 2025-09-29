@@ -1,7 +1,21 @@
 
 'use client';
+import { RolePlayScenario as Scenario } from '@prisma/client';
 import { RolePlayScenario as PrismaRolePlayScenario } from '@prisma/client';
 import { RolePlayScenario } from '@/app/roleplay-test/roleplayData';
+import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+'use client';
+
+// 1. IMPORTAMOS EL TIPO OFICIAL DE PRISMA Y NADA MÁS
+import { RolePlayScenario as Scenario } from '@prisma/client';
+
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,13 +50,11 @@ import toast from 'react-hot-toast';
 // Importar datos de prueba
 import { roleplayScenarios, CATEGORIAS_ROLEPLAY, NIVELES_DIFICULTAD_ROLEPLAY, TIPOS_CLIENTE_AUTOMOTRIZ } from '@/app/roleplay-test/roleplayData';
 
-// Usar el tipo importado directamente, NO redefinir
-type Scenario = RolePlayScenario;
-
+// 2. DEFINIMOS LAS PROPS DEL COMPONENTE, SIN DUPLICADOS Y CON EL TIPO CORRECTO
 interface RolePlayScenariosProps {
-  onSelectScenario?: (scenario: any) => void;
-  onStartSimulation?: (scenario: any) => void;
-  selectedScenario?: any | null | undefined;
+  selectedScenario?: Scenario | null;
+  onSelectScenario: (scenario: Scenario) => void;
+  onStartSimulation: (scenario: Scenario) => void;
   showManagement?: boolean;
 }
 
