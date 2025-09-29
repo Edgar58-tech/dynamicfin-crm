@@ -115,10 +115,10 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({
-      evaluaciones.map(evaluation => ({
-        id: eval.id,
-        scenario: {
-          titulo: eval.session.scenario.titulo,
+      evaluations: evaluaciones.map(evaluation => ({ // ✅ CORREGIDO: Llave "evaluations:" añadida
+      id: evaluation.id, // ✅ CORREGIDO: Variable correcta
+      scenario: {
+      titulo: evaluation.session.scenario.titulo, // ✅ CORREGIDO: Variable correcta
           categoria: eval.session.scenario.categoria,
           tipoCliente: eval.session.scenario.tipoCliente
         },
