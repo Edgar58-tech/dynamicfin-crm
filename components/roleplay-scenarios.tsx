@@ -3,7 +3,6 @@
 
 // 1. IMPORTAMOS EL TIPO OFICIAL DE PRISMA Y NADA MÁS
 import { RolePlayScenario as Scenario } from '@prisma/client';
-
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
