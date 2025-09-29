@@ -64,14 +64,19 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      evaluation: {
-        id: nuevaEvaluacion.id,
-        ...evaluacion,
-        duracionSesion: duracion,
-        fechaEvaluacion: nuevaEvaluacion.fechaEvaluacion
-      }
-    }, { status: 200 });
-
+  evaluations: evaluaciones.map(evaluation => ({
+    id: evaluation.id,
+    scenario: {
+      titulo: evaluation.session.scenario.titulo,
+      categoria: evaluation.session.scenario.categoria,
+      tipoCliente: evaluation.session.scenario.tipoCliente
+    },
+    puntuacionGeneral: evaluation.puntuacionGeneral,
+    ventaLograda: evaluation.ventaLograda,
+    duracionSesion: evaluation.session.duracionMinutos,
+    fechaEvaluacion: evaluation.fechaEvaluacion.toISOString()
+  }))
+}, { status: 200 });
   } catch (error) {
     console.error('Error al evaluar sesión de roleplay:', error);
     return NextResponse.json(
