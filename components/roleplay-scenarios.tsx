@@ -1,17 +1,5 @@
 
 'use client';
-import { RolePlayScenario as Scenario } from '@prisma/client';
-import { RolePlayScenario as PrismaRolePlayScenario } from '@prisma/client';
-import { RolePlayScenario } from '@/app/roleplay-test/roleplayData';
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-'use client';
 
 // 1. IMPORTAMOS EL TIPO OFICIAL DE PRISMA Y NADA MÁS
 import { RolePlayScenario as Scenario } from '@prisma/client';
