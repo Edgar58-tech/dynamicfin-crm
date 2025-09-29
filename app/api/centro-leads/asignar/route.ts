@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       const cargaActual = await prisma.prospecto.count({
         where: {
           vendedorId: guardia.vendedorId,
-          fechaCreacion: {
+          createdAt: { // <-- Correcto
             gte: hoy,
             lt: manana
           }
