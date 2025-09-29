@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
         const cargaActual = await prisma.prospecto.count({
           where: {
             vendedorId: guardia.vendedorId,
-            fechaCreacion: {
+            createdAt: {
               gte: hoy,
               lt: manana
             }
