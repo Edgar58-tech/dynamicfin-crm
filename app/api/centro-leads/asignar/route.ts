@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
     const vendedorGuardia = await prisma.vendedorGuardia.findFirst({
       where: {
         vendedorId,
-        fechaGuardia: hoy,
+        fecha: hoy,
         activo: true
       },
       include: {
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
       // Obtener todos los vendedores de guardia y sus cargas
       const vendedoresGuardia = await prisma.vendedorGuardia.findMany({
         where: {
-          fechaGuardia: hoy,
+          fecha: hoy,
           activo: true
         }
       });
