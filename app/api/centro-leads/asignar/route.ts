@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -57,7 +56,7 @@ export async function GET(request: NextRequest) {
       const cargaActual = await prisma.prospecto.count({
         where: {
           vendedorId: guardia.vendedorId,
-          createdAt: { // <-- Correcto
+          createdAt: {
             gte: hoy,
             lt: manana
           }
@@ -77,7 +76,7 @@ export async function GET(request: NextRequest) {
         cargaActual,
         metaDelDia,
         porcentajeMeta,
-        recomendado: false, // Se actualizará después
+        recomendado: false,
         sobrecargado: porcentajeMeta > 100
       });
     }
@@ -130,7 +129,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    // Solo roles de centro de leads pueden asignar manualmente
+    // Solo roles autorizados pueden asignar manualmente
     if (!['COORDINADOR_LEADS', 'GERENTE_VENTAS', 'GERENTE_GENERAL'].includes(session.user.rol)) {
       return NextResponse.json({ error: 'Sin permisos para asignación manual' }, { status: 403 });
     }
@@ -182,7 +181,6 @@ export async function POST(request: NextRequest) {
       const manana = new Date(hoy);
       manana.setDate(manana.getDate() + 1);
 
-      // Obtener todos los vendedores de guardia y sus cargas
       const vendedoresGuardia = await prisma.vendedorGuardia.findMany({
         where: {
           fecha: hoy,
@@ -209,7 +207,6 @@ export async function POST(request: NextRequest) {
       const menorCarga = Math.min(...cargas.map(c => c.carga));
       const mayorCarga = Math.max(...cargas.map(c => c.carga));
       
-      // Si la asignación crea un desbalance significativo
       const nuevaDiferencia = Math.max(cargaNuevaSeleccionado - menorCarga, mayorCarga - menorCarga);
       
       if (nuevaDiferencia >= 3 && cargaVendedorSeleccionado !== menorCarga) {
@@ -227,7 +224,7 @@ export async function POST(request: NextRequest) {
             },
             vendedorSugerido: vendedorSugeridoInfo ? {
               id: vendedorSugeridoInfo.vendedorId,
-              nombre: `Vendedor ID ${vendedorSugeridoInfo.vendedorId}`, // Aquí podrías obtener el nombre real
+              nombre: `${vendedorSugeridoInfo.vendedor.nombre} ${vendedorSugeridoInfo.vendedor.apellido || ''}`.trim(),
               carga: menorCarga
             } : null
           }
@@ -237,51 +234,25 @@ export async function POST(request: NextRequest) {
 
     // Realizar la asignación
     await prisma.$transaction(async (tx) => {
-      // Actualizar prospecto
+      // 1. Actualizar el prospecto (sin prioridadAsignacion ni metodoAsignacion)
       await tx.prospecto.update({
         where: { id: prospectoId },
         data: {
           vendedorId,
           estadoAsignacion: 'ASIGNADO',
           fechaAsignacion: new Date(),
-          prioridadAsignacion: prioridad || 'NORMAL',
-          metodoAsignacion: metodo || 'MANUAL'
+          // NOTA: nivelUrgencia se podría actualizar si mapeas "prioridad" → "nivelUrgencia"
+          // Pero no es obligatorio. Lo dejamos como está.
         }
       });
 
-      // Crear historial de asignación
-      await tx.historialAsignacion.create({
+      // 2. Crear el registro en AsignacionLead (donde SÍ existen esos campos)
+      await tx.asignacionLead.create({
         data: {
           prospectoId,
-          vendedorId,
+          coordinadorId: session.user.id,
+          vendedorAsignadoId: vendedorId,
           fechaAsignacion: new Date(),
-          metodo: metodo || 'MANUAL',
-          asignadoPor: session.user.id,
-          observaciones: observaciones || `Asignación manual realizada por ${session.user.nombre}`
-        }
-      });
-    });
-
-    return NextResponse.json({
-  evaluations: evaluaciones.map(evaluation => ({
-    id: evaluation.id,
-    scenario: {
-      titulo: evaluation.session.scenario.titulo,
-      categoria: evaluation.session.scenario.categoria,
-      tipoCliente: evaluation.session.scenario.tipoCliente
-    },
-    puntuacionGeneral: evaluation.puntuacionGeneral,
-    ventaLograda: evaluation.ventaLograda,
-    duracionSesion: evaluation.session.duracionMinutos,
-    fechaEvaluacion: evaluation.fechaEvaluacion.toISOString()
-  }))
-}, { status: 200 });
-
-  } catch (error) {
-    console.error('Error al asignar lead manualmente:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
-  }
-}
+          metodologiaAsignacion: metodo || 'MANUAL',
+          prioridadAsignacion: prioridad || 'NORMAL',
+          observaciones: observaciones || `Asignación manual realizada por ${session.user.nombre}`,
