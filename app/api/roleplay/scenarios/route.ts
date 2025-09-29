@@ -2,259 +2,123 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-
-export const dynamic = 'force-dynamic';
+import { prisma } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
     if (!session?.user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    // Solo vendedores y administradores pueden acceder a escenarios
+    if (!['VENDEDOR', 'GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_MARCA', 'DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'].includes(session.user.rol)) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
     const categoria = searchParams.get('categoria');
-    const nivel = searchParams.get('nivel');
-    const tipoCliente = searchParams.get('tipoCliente');
-    const activo = searchParams.get('activo');
+    const dificultad = searchParams.get('dificultad');
+    const activos = searchParams.get('activos') !== 'false';
 
-    const scenarios = await prisma.rolePlayScenario.findMany({
-      where: {
-        ...(categoria && { categoria }),
-        ...(nivel && { nivelDificultad: nivel }),
-        ...(tipoCliente && { tipoCliente }),
-        ...(activo !== null && { activo: activo === 'true' }),
-      },
+    const where: any = { activo: activos };
+    
+    if (categoria) {
+      where.categoria = categoria;
+    }
+    
+    if (dificultad) {
+      where.nivelDificultad = dificultad;
+    }
+
+    // Intentar obtener de la base de datos
+    let escenarios = await prisma.rolePlayScenario.findMany({
+      where,
       orderBy: [
         { categoria: 'asc' },
         { nivelDificultad: 'asc' },
-        { titulo: 'asc' }
-      ],
-      select: {
-        id: true,
-        titulo: true,
-        descripcion: true,
-        categoria: true,
-        nivelDificultad: true,
-        tipoCliente: true,
-        vehiculoInteres: true,
-        presupuestoCliente: true,
-        duracionEstimada: true,
-        activo: true,
-        dificultadPromedio: true,
-        completadoVeces: true,
-        puntuacionPromedio: true,
-        etiquetas: true,
-        createdAt: true,
-        updatedAt: true
+        { fechaCreacion: 'desc' }
+      ]
+    });
+
+    // Si no hay escenarios en la base de datos, crear algunos por defecto
+    if (escenarios.length === 0) {
+      const escenariosDefecto = [
+        {
+          titulo: 'Familia Buscando Minivan - Presupuesto Ajustado',
+          descripcion: 'Matrimonio con 3 hijos pequeños necesita cambiar su sedán por una minivan. Necesidad urgente por crecimiento familiar.',
+          categoria: 'PROSPECTACION',
+          tipoCliente: 'Familia joven con hijos pequeños',
+          vehiculoInteres: 'Minivan',
+          presupuesto: 280000,
+          nivelDificultad: 'PRINCIPIANTE',
+          duracionEstimada: 25,
+          activo: true,
+          configuracionIA: {
+            personalidad: 'Prácticos, buscan funcionalidad',
+            presupuesto_max: 300000,
+            objeciones_principales: ['precio', 'financiamiento', 'espacio']
+          }
+        },
+        {
+          titulo: 'Empresario Exitoso - SUV Premium',
+          descripcion: 'Empresario de alto perfil busca SUV premium para uso personal y empresarial.',
+          categoria: 'CIERRE',
+          tipoCliente: 'Empresario exitoso',
+          vehiculoInteres: 'SUV Premium',
+          presupuesto: 800000,
+          nivelDificultad: 'AVANZADO',
+          duracionEstimada: 35,
+          activo: true,
+          configuracionIA: {
+            personalidad: 'Exigente, valora el estatus',
+            presupuesto_max: 1000000,
+            objeciones_principales: ['tiempo', 'comparación_competencia']
+          }
+        },
+        {
+          titulo: 'Cliente Indeciso - Primera Compra',
+          descripcion: 'Joven profesional comprando su primer auto. Muy indeciso entre diferentes opciones.',
+          categoria: 'MANEJO_OBJECIONES',
+          tipoCliente: 'Joven profesional',
+          vehiculoInteres: 'Sedán compacto',
+          presupuesto: 350000,
+          nivelDificultad: 'INTERMEDIO',
+          duracionEstimada: 30,
+          activo: true,
+          configuracionIA: {
+            personalidad: 'Indeciso, necesita mucha información',
+            presupuesto_max: 400000,
+            objeciones_principales: ['indecision', 'precio', 'comparacion']
+          }
+        }
+      ];
+
+      // Crear escenarios por defecto
+      for (const escenario of escenariosDefecto) {
+        await prisma.rolePlayScenario.create({
+          data: escenario
+        });
       }
-    });
 
-    // Parse JSON fields
-    const scenariosFormatted = scenarios.map(scenario => ({
-      ...scenario,
-      etiquetas: scenario.etiquetas ? JSON.parse(scenario.etiquetas) : [],
-      presupuestoCliente: scenario.presupuestoCliente ? Number(scenario.presupuestoCliente) : null,
-      dificultadPromedio: scenario.dificultadPromedio ? Number(scenario.dificultadPromedio) : null,
-      puntuacionPromedio: scenario.puntuacionPromedio ? Number(scenario.puntuacionPromedio) : null
-    }));
+      // Volver a obtener los escenarios
+      escenarios = await prisma.rolePlayScenario.findMany({
+        where,
+        orderBy: [
+          { categoria: 'asc' },
+          { nivelDificultad: 'asc' },
+          { fechaCreacion: 'desc' }
+        ]
+      });
+    }
 
-    return NextResponse.json({
-      scenarios: scenariosFormatted,
-      total: scenarios.length
-    });
+    return NextResponse.json({ escenarios }, { status: 200 });
 
   } catch (error) {
-    console.error('Error fetching scenarios:', error);
+    console.error('Error al obtener escenarios:', error);
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }
     );
   }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
-    // Solo gerentes pueden crear escenarios
-    if (!['GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_MARCA', 'DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'].includes(session.user.rol)) {
-      return NextResponse.json({ error: 'Sin permisos para crear escenarios' }, { status: 403 });
-    }
-
-    const data = await request.json();
-    
-    // Validación básica
-    if (!data.titulo || !data.descripcion || !data.categoria || !data.tipoCliente) {
-      return NextResponse.json({ error: 'Campos requeridos faltantes' }, { status: 400 });
-    }
-
-    const scenario = await prisma.rolePlayScenario.create({
-      data: {
-        titulo: data.titulo,
-        descripcion: data.descripcion,
-        categoria: data.categoria,
-        nivelDificultad: data.nivelDificultad || 'medio',
-        tipoCliente: data.tipoCliente,
-        personalidadCliente: JSON.stringify(data.personalidadCliente || {}),
-        vehiculoInteres: data.vehiculoInteres,
-        presupuestoCliente: data.presupuestoCliente ? Number(data.presupuestoCliente) : null,
-        objetivosAprendizaje: JSON.stringify(data.objetivosAprendizaje || []),
-        objecionesComunes: JSON.stringify(data.objecionesComunes || []),
-        contextoPreventa: data.contextoPreventa,
-        duracionEstimada: data.duracionEstimada || 15,
-        pilaresEvaluados: JSON.stringify(data.pilaresEvaluados || []),
-        etiquetas: JSON.stringify(data.etiquetas || []),
-        activo: data.activo !== false
-      },
-      select: {
-        id: true,
-        titulo: true,
-        descripcion: true,
-        categoria: true,
-        nivelDificultad: true,
-        tipoCliente: true,
-        vehiculoInteres: true,
-        presupuestoCliente: true,
-        duracionEstimada: true,
-        activo: true,
-        createdAt: true
-      }
-    });
-
-    return NextResponse.json({
-      message: 'Escenario creado exitosamente',
-      scenario: {
-        ...scenario,
-        presupuestoCliente: scenario.presupuestoCliente ? Number(scenario.presupuestoCliente) : null
-      }
-    });
-
-  } catch (error) {
-    console.error('Error creating scenario:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PUT(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
-    // Solo gerentes pueden actualizar escenarios
-    if (!['GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_MARCA', 'DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'].includes(session.user.rol)) {
-      return NextResponse.json({ error: 'Sin permisos para actualizar escenarios' }, { status: 403 });
-    }
-
-    const data = await request.json();
-    
-    if (!data.id) {
-      return NextResponse.json({ error: 'ID del escenario requerido' }, { status: 400 });
-    }
-
-    const scenario = await prisma.rolePlayScenario.update({
-      where: { id: data.id },
-      data: {
-        ...(data.titulo && { titulo: data.titulo }),
-        ...(data.descripcion && { descripcion: data.descripcion }),
-        ...(data.categoria && { categoria: data.categoria }),
-        ...(data.nivelDificultad && { nivelDificultad: data.nivelDificultad }),
-        ...(data.tipoCliente && { tipoCliente: data.tipoCliente }),
-        ...(data.personalidadCliente && { personalidadCliente: JSON.stringify(data.personalidadCliente) }),
-        ...(data.vehiculoInteres !== undefined && { vehiculoInteres: data.vehiculoInteres }),
-        ...(data.presupuestoCliente !== undefined && { presupuestoCliente: data.presupuestoCliente ? Number(data.presupuestoCliente) : null }),
-        ...(data.objetivosAprendizaje && { objetivosAprendizaje: JSON.stringify(data.objetivosAprendizaje) }),
-        ...(data.objecionesComunes && { objecionesComunes: JSON.stringify(data.objecionesComunes) }),
-        ...(data.contextoPreventa !== undefined && { contextoPreventa: data.contextoPreventa }),
-        ...(data.duracionEstimada && { duracionEstimada: data.duracionEstimada }),
-        ...(data.pilaresEvaluados && { pilaresEvaluados: JSON.stringify(data.pilaresEvaluados) }),
-        ...(data.etiquetas && { etiquetas: JSON.stringify(data.etiquetas) }),
-        ...(data.activo !== undefined && { activo: data.activo }),
-      },
-      select: {
-        id: true,
-        titulo: true,
-        descripcion: true,
-        categoria: true,
-        nivelDificultad: true,
-        tipoCliente: true,
-        vehiculoInteres: true,
-        presupuestoCliente: true,
-        duracionEstimada: true,
-        activo: true,
-        updatedAt: true
-      }
-    });
-
-    return NextResponse.json({
-      message: 'Escenario actualizado exitosamente',
-      scenario: {
-        ...scenario,
-        presupuestoCliente: scenario.presupuestoCliente ? Number(scenario.presupuestoCliente) : null
-      }
-    });
-
-  } catch (error) {
-  console.error('Error updating scenario:', error);
-  // Verificamos si 'error' es un objeto y tiene la propiedad 'code'
-  if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2025') {
-    return NextResponse.json({ error: 'Escenario no encontrado' }, { status: 404 });
-  }
-  return NextResponse.json(
-    { error: 'Error interno del servidor' },
-    { status: 500 }
-  );
-}
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
-    // Solo gerentes pueden eliminar escenarios
-    if (!['GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_MARCA', 'DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'].includes(session.user.rol)) {
-      return NextResponse.json({ error: 'Sin permisos para eliminar escenarios' }, { status: 403 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    
-    if (!id) {
-      return NextResponse.json({ error: 'ID del escenario requerido' }, { status: 400 });
-    }
-
-    await prisma.rolePlayScenario.delete({
-      where: { id: parseInt(id) }
-    });
-
-    return NextResponse.json({
-      message: 'Escenario eliminado exitosamente'
-    });
-} catch (error) {
-  console.error('Error deleting scenario:', error);
-  // Verificamos si 'error' es un objeto y tiene la propiedad 'code'
-  if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2025') {
-    return NextResponse.json({ error: 'Escenario no encontrado' }, { status: 404 });
-  }
-  return NextResponse.json(
-    { error: 'Error interno del servidor' },
-    { status: 500 }
-  );
-}
 }

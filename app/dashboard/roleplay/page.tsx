@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import RolePlaySimulator from '@/components/roleplay-simulator';
+import RolePlaySimpleSimulator from '@/components/roleplay-simple-simulator';
 import RolePlayScenarios from '@/components/roleplay-scenarios';
 // import { redirect } from 'next/navigation';
 
@@ -334,7 +334,7 @@ export default function RolePlayPage() {
         </TabsList>
 
         <TabsContent value="simulador" className="space-y-6">
-          <RolePlaySimulator
+          <RolePlaySimpleSimulator
             scenario={selectedScenario}
             onComplete={handleSessionComplete}
             onEvaluate={handleViewEvaluation}

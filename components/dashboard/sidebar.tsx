@@ -33,7 +33,8 @@ import {
   UserPlus,
   AlertCircle,
   LineChart,
-  Brain
+  Brain,
+  DollarSign
 } from 'lucide-react';
 import { TipoRol } from '@prisma/client';
 
@@ -140,12 +141,21 @@ export function Sidebar() {
       featured: true,
     },
 
-    // SECCIÓN GRABACIÓN POR PROXIMIDAD
+    // SECCIÓN GRABACIÓN POR PROXIMIDAD - CORREGIDO
     {
       title: '📍 Grabación Proximidad',
-      href: '/dashboard/grabacion-proximidad',
+      href: '/dashboard/proximity',
       icon: Activity,
       roles: ['VENDEDOR', 'GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_MARCA', 'DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'],
+      featured: true,
+    },
+
+    // SECCIÓN COMISIONES Y PAGOS - NUEVA FUNCIONALIDAD
+    {
+      title: '💰 Pagos y Comisiones',
+      href: '/dashboard/pagos',
+      icon: DollarSign,
+      roles: ['GERENTE_VENTAS', 'GERENTE_GENERAL', 'DIRECTOR_MARCA', 'DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'],
       featured: true,
     },
 
@@ -212,6 +222,12 @@ export function Sidebar() {
       href: '/dashboard/grupos',
       icon: Building2,
       roles: ['DIRECTOR_GENERAL', 'DYNAMICFIN_ADMIN'],
+    },
+    {
+      title: 'Gestión Vendedores',
+      href: '/dashboard/vendedores',
+      icon: Users,
+      roles: ['DYNAMICFIN_ADMIN', 'GERENTE_VENTAS', 'GERENTE_GENERAL'],
     },
     {
       title: 'Usuarios',
