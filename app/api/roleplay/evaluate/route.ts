@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({
-      evaluations: evaluaciones.map(eval => ({
+      evaluaciones.map(evaluation => ({
         id: eval.id,
         scenario: {
           titulo: eval.session.scenario.titulo,
